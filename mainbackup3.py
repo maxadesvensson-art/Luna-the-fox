@@ -271,10 +271,8 @@ def load_animation(folder, target_width=78, target_height=105):
     
     print(f"Laddar {folder} animation...")
     
-    # Sök relativt skriptets mapp, oavsett var man kör från
-    script_dir = os.path.dirname(os.path.abspath(__file__))
     for name in possible_patterns:
-        path = os.path.join(script_dir, "bilder", name)
+        path = f"bilder/{name}"
         if os.path.exists(path):
             try:
                 img = pygame.image.load(path).convert_alpha()
@@ -439,12 +437,6 @@ ENEMIES_3 = [
 BOSS_START_X = 4900.0
 BOSS_Y       = 430
 
-# Katt-mål per nivå (x, y = plattformens top-y)
-CAT_POS = {
-    1: (4450 + 500, 555),    # Nivå 1 – sista plattform
-    2: (4080 + 400, 535),    # Nivå 2 – sista plattform
-}
-
 # Facklor i grottnivån (x, y)
 TORCHES = [
     (850,400),(1200,300),(1570,400),(1950,290),
@@ -453,22 +445,20 @@ TORCHES = [
 
 # Fiender per nivå: (x, y, patrol_w, speed_min, speed_max)
 ENEMIES_1 = [
-    # (x, plattformens_top_y, patrol_w, spd_min, spd_max)
-    (1150, 455, 200, 1.5, 2.5),   # plattform 940/455
-    (1900, 355, 200, 1.8, 2.8),   # plattform 1360/355
-    (2000, 440, 220, 2.0, 3.2),   # plattform 1750/440
-    (2400, 350, 200, 2.2, 3.5),   # plattform 2210/350
-    (4150, 415, 200, 2.5, 3.8),   # plattform 4080/415
+    (1100,440,200, 1.5,2.5),
+    (1900,425,250, 1.8,2.8),
+    (2800,420,220, 2.0,3.2),
+    (3500,400,280, 2.2,3.5),
+    (4100,400,200, 2.5,3.8),
 ]
 ENEMIES_2 = [
-    # (x, plattformens_top_y, patrol_w, spd_min, spd_max)
-    ( 950,  440, 160, 2.0, 3.0),   # plattform 820/440
-    (1300,  340, 180, 2.2, 3.2),   # plattform 1170/340
-    (1700,  440, 160, 1.8, 2.8),   # plattform 1530/440
-    (2100,  330, 150, 2.5, 3.5),   # plattform 1920/330
-    (2400,  430, 160, 2.8, 3.8),   # plattform 2260/430
-    (2800,  320, 150, 2.5, 3.5),   # plattform 2640/320
-    (3850,  400, 180, 3.0, 4.2),   # plattform 3710/400
+    (900, 425,180, 2.0,3.0),
+    (1600,425,220, 2.2,3.2),
+    (2000,315,160, 1.8,2.8),
+    (2700,305,200, 2.5,3.5),
+    (3050,405,200, 2.8,3.8),
+    (3450,295,180, 2.5,3.5),
+    (3770,385,220, 3.0,4.2),
 ]
 
 # ═══════════════════════════════════════════
@@ -514,25 +504,37 @@ def draw_torch(surf, tx, ty, cam_x, tick):
 
 
 
-def draw_fox(surf, prect, cam_x, anim="idle", frame=0, face_right=True, tick=0, invincible=False):
-    """Rita Luna med korrekt sprite. Alla animationsparametrar skickas in explicit."""
-    if invincible and (tick // 4) % 2 == 1:
+def draw_fox(surf, prect, cam_x, invincible=False):
+    if invincible and (atick // 4) % 2 == 1:
         return
 
-    frames = ANIMATIONS.get(anim, [])
-    if not frames:
-        return  # inga sprites laddade - tyst fallback
+    frames = ANIMATIONS.get(current_anim)
+    if not frames or anim_frame >= len(frames):
+        return
 
-    img = frames[frame % len(frames)]
+    img = frames[anim_frame]
 
-    if not face_right:
+    if not facing_right:
         img = pygame.transform.flip(img, True, False)
 
-    # Centrera sprite på kollisionsboxen, fötterna i linje med prect.bottom
+    # 🎯 Perfekt position (centrerad + står på marken)
     draw_x = int(prect.centerx - cam_x - img.get_width() // 2)
     draw_y = int(prect.bottom - img.get_height())
 
     surf.blit(img, (draw_x, draw_y))
+
+    # 🧪 DEBUG (ta bort sen)
+    # pygame.draw.rect(
+    #     surf,
+    #     (255, 0, 0),
+    #     (
+    #         int(prect.x - cam_x),
+    #         int(prect.y),
+    #         prect.width,
+    #         prect.height
+    #     ),
+    #     2
+    # )
 
 
 
@@ -588,40 +590,37 @@ def draw_enemy(surf, e, cam_x, tick):
 
 
 
-def update_animation():
-    global current_anim, anim_frame, anim_timer, facing_right
+# def update_animation():
+#     global current_anim, anim_frame, anim_timer, facing_right
 
-    anim_timer += 1 / FPS
+#     anim_timer += 1 / FPS
 
-    # Välj rätt animation
-    if dashing:
-        new_anim = "dash"
-    elif invincible > 0:
-        new_anim = "hit"
-    elif not on_gnd:
-        new_anim = "double_jump" if not djump_avail else "jump"
-    elif abs(vx) > 2.0:
-        new_anim = "run"
-    else:
-        new_anim = "idle"
+#     # Välj rätt animation
+#     if dashing:
+#         new_anim = "dash"
+#     elif invincible > 0:
+#         new_anim = "hit"
+#     elif not on_gnd:
+#         new_anim = "double_jump" if not djump_avail else "jump"
+#     elif abs(vx) > 2.0:
+#         new_anim = "run"
+#     else:
+#         new_anim = "idle"
 
-    # Byt animation om nödvändigt
-    if new_anim != current_anim:
-        current_anim = new_anim
-        anim_frame = 0
-        anim_timer = 0
+#     # Byt animation om nödvändigt
+#     if new_anim != current_anim:
+#         current_anim = new_anim
+#         anim_frame = 0
+#         anim_timer = 0
 
-    # Uppdatera bildruta med per-animation hastighet
-    if current_anim in ANIMATIONS and ANIMATIONS[current_anim]:
-        fps_map = {"run":0.08, "idle":0.20, "dash":0.06,
-                   "hit":0.10, "jump":0.18, "double_jump":0.12,
-                   "landing":0.14}
-        spd = fps_map.get(current_anim, 0.14)
-        if anim_timer >= spd:
-            anim_timer = 0.0
-            anim_frame = (anim_frame + 1) % len(ANIMATIONS[current_anim])
+#     # Uppdatera bildruta
+#     if current_anim in ANIMATIONS and ANIMATIONS[current_anim]:
+#         speed = 0.07 if current_anim == "run" else 0.16
+#         if anim_timer >= speed:
+#             anim_timer = 0
+#             anim_frame = (anim_frame + 1) % len(ANIMATIONS[current_anim])
 
-    facing_right = fright
+#     facing_right = fright
 
 
 
@@ -739,144 +738,12 @@ def draw_hud(surf, name, sc, t, lives, lvl, dash_cd, djump):
     jt=fti.render("2x",True,WHITE if djump else (80,70,40))
     surf.blit(jt,(bar_x+bar_w+16,bar_y+2))
 
-def draw_checkpoint(surf, cx, cy, cam_x, active, tick=0):
-    """
-    Rita en snygg checkpoint-portal på plattformens yta.
-    cx, cy = plattformens topp-position (checkpoint placeras ovanpå)
-    """
-    sx = int(cx - cam_x)
-    if sx < -60 or sx > SW + 60: return
-
-    t = tick * 0.05
-    if active:
-        # Aktiv: glödande grön ring + stjärna + pulserande glöd
-        pulse = int(math.sin(t * 2) * 6)
-        glow_r = 38 + pulse
-
-        # Yttre glöd
-        glow = pygame.Surface((glow_r*2+20, glow_r*2+20), pygame.SRCALPHA)
-        a = int(60 + math.sin(t*3)*20)
-        pygame.draw.circle(glow, (80, 255, 120, a),
-                           (glow_r+10, glow_r+10), glow_r+10)
-        surf.blit(glow, (sx - glow_r - 10, cy - glow_r*2 - 10))
-
-        # Ring
-        pygame.draw.circle(surf, (40, 200, 80),  (sx, cy-38), 28+pulse, 0)
-        pygame.draw.circle(surf, (120, 255, 140), (sx, cy-38), 28+pulse, 4)
-
-        # Bock-ikon inuti
-        bx, by = sx, cy-38
-        pts = [(bx-10, by+2), (bx-3, by+10), (bx+12, by-8)]
-        pygame.draw.lines(surf, (255,255,255), False, pts, 4)
-
-        # Text
-        label = fti.render("CHECKPOINT", True, (140, 255, 160))
-        surf.blit(label, label.get_rect(center=(sx, cy-72)))
-
-    else:
-        # Inaktiv: gul ring, ej besökt ännu
-        pulse = int(math.sin(t) * 3)
-        pygame.draw.circle(surf, (100, 80, 20),  (sx, cy-38), 24+pulse, 0)
-        pygame.draw.circle(surf, (200, 160, 40),  (sx, cy-38), 24+pulse, 3)
-
-        # Utropstecken inuti
-        pygame.draw.rect(surf, (220,180,50), (sx-2, cy-52, 5, 14), border_radius=2)
-        pygame.draw.circle(surf, (220,180,50), (sx, cy-32), 3)
-
-        label = fti.render("CHECKPOINT", True, (180, 150, 60))
-        surf.blit(label, label.get_rect(center=(sx, cy-68)))
-
-# ── Svart katt – nivåmål ────────────────────────────────
-CAT_W, CAT_H = 60, 70   # kollisionsbox
-
-def draw_cat(surf, cx, cy, cam_x, tick):
-    """Rita en söt svart katt som sitter och väntar på Luna."""
-    sx = int(cx - cam_x)
-    sy = int(cy)
-    if sx < -80 or sx > SW + 80:
-        return
-
-    t = tick * 0.04
-    tail_wave = math.sin(t * 1.8) * 18   # svans-vågning
-
-    # ── Svans (böjd) ────────────────────────────────
-    tail_pts = []
-    for i in range(10):
-        ti = i / 9
-        tx2 = sx - 18 + int(math.sin(ti * math.pi + t) * (12 + tail_wave * ti))
-        ty2 = sy + 30 + int(ti * 30)
-        tail_pts.append((tx2, ty2))
-    if len(tail_pts) >= 2:
-        pygame.draw.lines(surf, (20, 20, 20), False, tail_pts, 10)
-        pygame.draw.lines(surf, (50, 50, 50), False, tail_pts, 4)
-    # Svans-spets
-    pygame.draw.circle(surf, (80, 80, 80), tail_pts[-1], 6)
-
-    # ── Kropp ────────────────────────────────────────
-    pygame.draw.ellipse(surf, (15, 15, 15), (sx - 22, sy + 8, 44, 38))
-    # Päls-glans
-    pygame.draw.ellipse(surf, (40, 40, 40), (sx - 14, sy + 10, 20, 14))
-
-    # ── Huvud ────────────────────────────────────────
-    pygame.draw.circle(surf, (15, 15, 15), (sx, sy), 22)
-
-    # Öron (spetsiga)
-    pygame.draw.polygon(surf, (15, 15, 15),
-        [(sx - 16, sy - 14), (sx - 24, sy - 38), (sx - 6, sy - 18)])
-    pygame.draw.polygon(surf, (15, 15, 15),
-        [(sx + 16, sy - 14), (sx + 24, sy - 38), (sx + 6, sy - 18)])
-    # Öron inre (rosa)
-    pygame.draw.polygon(surf, (180, 80, 100),
-        [(sx - 14, sy - 16), (sx - 20, sy - 32), (sx - 8, sy - 18)])
-    pygame.draw.polygon(surf, (180, 80, 100),
-        [(sx + 14, sy - 16), (sx + 20, sy - 32), (sx + 8, sy - 18)])
-
-    # Ögon – blinkar periodiskt
-    blink = (tick % 180) < 8   # blinkar var 3e sekund
-    eye_col = (60, 220, 120)   # gröna kattögon
-    if not blink:
-        pygame.draw.ellipse(surf, eye_col, (sx - 13, sy - 8, 10, 13))
-        pygame.draw.ellipse(surf, eye_col, (sx + 3,  sy - 8, 10, 13))
-        # Pupiller (smala)
-        pygame.draw.ellipse(surf, (5, 5, 5), (sx - 10, sy - 7, 4, 11))
-        pygame.draw.ellipse(surf, (5, 5, 5), (sx + 6,  sy - 7, 4, 11))
-        # Ögon-glans
-        pygame.draw.circle(surf, (255, 255, 255), (sx - 9, sy - 5), 2)
-        pygame.draw.circle(surf, (255, 255, 255), (sx + 9, sy - 5), 2)
-    else:
-        # Blinkad = streck
-        pygame.draw.line(surf, (40, 40, 40), (sx - 14, sy - 2), (sx - 4, sy - 2), 3)
-        pygame.draw.line(surf, (40, 40, 40), (sx + 4,  sy - 2), (sx + 14, sy - 2), 3)
-
-    # Nos + morrhår
-    pygame.draw.circle(surf, (200, 100, 120), (sx, sy + 4), 4)
-    for mx2, my2, dx2, dy2 in [
-        (sx - 4, sy + 4, -22, -4), (sx - 4, sy + 4, -22,  4),
-        (sx + 4, sy + 4,  22, -4), (sx + 4, sy + 4,  22,  4),
-    ]:
-        pygame.draw.line(surf, (100, 100, 100), (mx2, my2), (mx2 + dx2, my2 + dy2), 2)
-
-    # Glöd-effekt runt katten (lockande)
-    glow_a = int(40 + math.sin(t * 2) * 20)
-    glow = pygame.Surface((120, 120), pygame.SRCALPHA)
-    pygame.draw.circle(glow, (100, 220, 140, glow_a), (60, 60), 60)
-    surf.blit(glow, (sx - 60, sy - 60))
-
-    # "Miaow!"-text som dyker upp periodiskt
-    if 60 < tick % 240 < 100:
-        alpha = min(255, (tick % 240 - 60) * 8)
-        alpha = min(alpha, 255 - max(0, (tick % 240 - 90) * 8))
-        mtxt = fti.render("Miaow! ~", True, (180, 255, 180))
-        surf.blit(mtxt, mtxt.get_rect(center=(sx, sy - 55)))
-
-    # Pil + "Gå till katten!"
-    hint_a = int(180 + math.sin(t * 3) * 60)
-    htxt = fti.render("Gå till katten för nästa bana!", True, (220, 255, 200))
-    hs = pygame.Surface((htxt.get_width() + 4, htxt.get_height() + 4), pygame.SRCALPHA)
-    hs.fill((0, 0, 0, 80))
-    surf.blit(hs, (sx - htxt.get_width() // 2 - 2, sy - 90))
-    surf.blit(htxt, htxt.get_rect(center=(sx, sy - 88)))
-
+def draw_checkpoint(surf,cx,cy,cam_x,active):
+    sx=int(cx-cam_x)
+    if sx<-20 or sx>SW+20: return
+    pcol=GOLD if active else (100,80,30)
+    pygame.draw.rect(surf,(80,60,20),(sx-3,cy-40,6,50))
+    pygame.draw.polygon(surf,pcol,[(sx+3,cy-40),(sx+28,cy-28),(sx+3,cy-16)])
 
 def draw_lava(surf, pools, cam_x, tick):
     for lx,lw in pools:
@@ -1091,22 +958,8 @@ def main():
     btn_back  =Button("Tillbaka",cx,630,w=220,h=48)
     mbtns=[btn_play,btn_scores,btn_quit]
 
-    # Meny-räv showcase
+    # Meny-räv
     mfx=float(-80); mtick=0
-    # Showcase-index (menuloop)
-    _sc_idx = 0
-    # Showcase-state: Luna visar upp sina rörelser i mitten
-    showcase_state = "idle"   # idle, run_right, run_left, jump, dash
-    showcase_timer = 0
-    showcase_vx    = 0.0
-    showcase_vy    = 0.0
-    showcase_x     = float(SW // 2 - 39)   # centrerad
-    showcase_y     = float(SH - 220)
-    showcase_on_gnd= True
-    showcase_dir   = True   # True=höger
-    showcase_frame = 0
-    showcase_ftimer= 0.0
-    SHOWCASE_FLOOR = SH - 220  # y-position för marken i menyn
 
     # Spelvariabler
     GRAV=0.72; JUMP=-19.5; SPEED=9.8; ACC=0.26; FRIC=0.78
@@ -1116,7 +969,6 @@ def main():
     checks=[]; check_active=[]
     meteors=[]; meteor_timer=0
     boss=None; boss_fight=False
-    cat_touched=False
     cam_x=0.0
     prect=pygame.Rect(150,380,44,52)
 
@@ -1144,7 +996,7 @@ def main():
             new_anim = "hit"
         elif not on_gnd:
             new_anim = "double_jump" if not djump_avail else "jump"
-        elif abs(vx) > 1.2:
+        elif abs(vx) > 2.0:
             new_anim = "run"
         else:
             new_anim = "idle"
@@ -1186,7 +1038,7 @@ def main():
 
     def reset(level=1, from_checkpoint=False):
         nonlocal plats,moving_plats,coins,parts,enemies,checks,check_active
-        nonlocal meteors,meteor_timer,boss,boss_fight,cat_touched
+        nonlocal meteors,meteor_timer,boss,boss_fight
         nonlocal cam_x,prect,vx,vy,on_gnd,fright
         nonlocal atick,jsq,jst,score,gtime,lives,lvl
         nonlocal djump_avail,jheld,jht,dash_cd,dash_dur,dashing
@@ -1227,12 +1079,10 @@ def main():
         djump_avail=True; jheld=False; jht=0
         dash_cd=0; dash_dur=0; dashing=False; invincible=0
         coyote=0; jbuf=0
-        cat_touched=False
 
         for (ex,ey,pw,smin,smax) in ed:
             spd=random.uniform(smin,smax)
-            # ey = plattformens top-y, fienden ska stå ovanpå → y = ey - h
-            enemies.append({"x":float(ex),"y":float(ey)-54,
+            enemies.append({"x":float(ex),"y":float(ey)-22,
                             "w":36,"h":54,"dir":1.0,
                             "patrol_x":float(ex),"patrol_w":pw,
                             "spd":spd,"tick":0,"lvl":lvl,"knockback":0})
@@ -1248,46 +1098,6 @@ def main():
 
 
 
-
-    # ── Animation-uppdatering (inuti main för att nå lokala variabler) ──
-    def update_animation():
-        nonlocal current_anim, anim_frame, anim_timer
-
-        anim_timer += 1.0 / FPS
-
-        # Välj rätt animation baserat på spelläge
-        if dashing:
-            new_anim = "dash"
-        elif invincible > 0:
-            new_anim = "hit"
-        elif not on_gnd:
-            new_anim = "double_jump" if not djump_avail else "jump"
-        elif abs(vx) > 1.2:
-            new_anim = "run"
-        else:
-            new_anim = "idle"
-
-        # Återställ frame vid animationsbyte
-        if new_anim != current_anim:
-            current_anim = new_anim
-            anim_frame   = 0
-            anim_timer   = 0.0
-
-        # Ticka frame framåt med rätt hastighet per animation
-        if current_anim in ANIMATIONS and ANIMATIONS[current_anim]:
-            fps_map = {
-                "run":         0.08,
-                "idle":        0.20,
-                "dash":        0.06,
-                "hit":         0.10,
-                "jump":        0.18,
-                "double_jump": 0.12,
-                "landing":     0.14,
-            }
-            spd = fps_map.get(current_anim, 0.14)
-            if anim_timer >= spd:
-                anim_timer = 0.0
-                anim_frame = (anim_frame + 1) % len(ANIMATIONS[current_anim])
 
     # Fade-overlay
     fade_surf=pygame.Surface((SW,SH)); fade_surf.fill((0,0,0))
@@ -1360,6 +1170,24 @@ def main():
             if coyote>0: coyote-=1
 
             keys=pygame.key.get_pressed()
+
+# 
+        if keys[pygame.K_RIGHT] or keys[pygame.K_LEFT]:
+            if current_anim != "run":
+                current_anim = "run"
+                anim_frame = 0
+        else:
+            if current_anim != "idle":
+                current_anim = "idle"
+                anim_frame = 0
+# 
+
+
+
+
+
+
+
             tx=0.0
             if keys[pygame.K_a] or keys[pygame.K_LEFT]:  tx-=SPEED; fright=False
             if keys[pygame.K_d] or keys[pygame.K_RIGHT]: tx+=SPEED; fright=True
@@ -1582,19 +1410,20 @@ def main():
                 else:
                     prect.topleft=checkpoint_pos if checkpoint_pos else (150,380); vx=vy=0
 
-            # ── Katt-kollision → nästa bana ──────────────────────
-            if lvl in CAT_POS and not boss_fight and not cat_touched:
-                cat_x, cat_plat_y = CAT_POS[lvl]
-                cat_rect = pygame.Rect(cat_x - CAT_W//2, cat_plat_y - CAT_H,
-                                       CAT_W, CAT_H)
-                if prect.colliderect(cat_rect):
-                    cat_touched = True
-                    play_sfx(SND_LEVEL); stop_music()
-                    bonus = max(0, (300 - gtime // FPS)) * 2
-                    score += bonus
-                    trans_dir = 1; trans_alpha = 0
-                    trans_target = lvl + 1
-                    state = S_TRANS; checkpoint_pos = None
+            # Nivå-övergång (1→2→3) – bara om inte boss-nivå slutad
+            if not boss_fight:
+                lp=plats[-1]
+                if on_gnd and prect.right>lp.left and prect.left<lp.right:
+                    if lvl==1:
+                        play_sfx(SND_LEVEL); stop_music()
+                        score+=max(0,(300-gtime//FPS))*2
+                        trans_dir=1; trans_alpha=0; trans_target=2
+                        state=S_TRANS; checkpoint_pos=None
+                    elif lvl==2:
+                        play_sfx(SND_LEVEL); stop_music()
+                        score+=max(0,(400-gtime//FPS))*2
+                        trans_dir=1; trans_alpha=0; trans_target=3
+                        state=S_TRANS; checkpoint_pos=None
 
             # Kamera
             tc=prect.centerx-SW//3
@@ -1615,71 +1444,21 @@ def main():
             else:
                 trans_alpha=max(0,trans_alpha-8)
 
-        # ── Showcase-animation i menyn ──────────────────────
-        showcase_timer += 1
-        showcase_ftimer += 1.0 / FPS
 
-        # Sekvens (frames, vx, face_right)
-        SEQ = [
-            ("idle",        100,  0.0,  True),
-            ("run",          80,  6.0,  True),
-            ("jump",         55,  4.0,  True),
-            ("run",          50,  5.0,  True),
-            ("idle",         40,  0.0,  True),
-            ("dash",         28, 14.0,  True),
-            ("idle",         50,  0.0,  False),
-            ("run",          80, -6.0,  False),
-            ("double_jump",  55, -4.0,  False),
-            ("run",          50, -5.0,  False),
-            ("idle",         60,  0.0,  False),
-        ]
-        sc_anim, sc_dur, sc_vx_target, sc_dir = SEQ[_sc_idx % len(SEQ)]
 
-        if showcase_timer >= sc_dur:
-            showcase_timer = 0
-            _sc_idx = (_sc_idx + 1) % len(SEQ)
-            sc_anim, sc_dur, sc_vx_target, sc_dir = SEQ[_sc_idx % len(SEQ)]
+                anim_timer += 1
 
-        showcase_state = sc_anim
-        showcase_dir   = sc_dir
+                # 
 
-        # Smooth acceleration mot target-hastighet
-        showcase_vx += (sc_vx_target - showcase_vx) * 0.18
-        if abs(showcase_vx) < 0.1: showcase_vx = 0.0
 
-        # Hopp – triggas exakt en gång när sekvensen byter till jump/double_jump
-        if sc_anim in ("jump", "double_jump") and showcase_on_gnd and showcase_timer == 1:
-            showcase_vy = -17.0
-            showcase_on_gnd = False
+    if anim_frame >= len(ANIMATIONS[current_anim]):
+        anim_frame = 0
 
-        # Gravitation
-        showcase_vy = min(showcase_vy + 0.65, 18)
-        showcase_x += showcase_vx
-        showcase_y += showcase_vy
 
-        # Mark-kollision
-        if showcase_y >= SHOWCASE_FLOOR:
-            showcase_y  = float(SHOWCASE_FLOOR)
-            showcase_vy = 0.0
-            showcase_on_gnd = True
-
-        # Håll inom skärmen (mjuk vändning)
-        if showcase_x < 80:
-            showcase_x = 80.0; showcase_vx = abs(showcase_vx)
-        if showcase_x > SW - 160:
-            showcase_x = float(SW - 160); showcase_vx = -abs(showcase_vx)
-
-        # Frame-tick
-        anim_frames = ANIMATIONS.get(showcase_state, [])
-        if anim_frames:
-            fps_m = {"run":0.07,"idle":0.22,"dash":0.05,
-                     "jump":0.16,"double_jump":0.11,"hit":0.10}
-            spd = fps_m.get(showcase_state, 0.14)
-            if showcase_ftimer >= spd:
-                showcase_ftimer = 0.0
-                showcase_frame = (showcase_frame + 1) % len(anim_frames)
-        else:
-            showcase_frame = 0
+# 
+        # Meny-räv
+        mfx+=2.5
+        if mfx>SW+100: mfx=-80.0
 
         # ═════════════════════════════════════
         #  RITA
@@ -1691,13 +1470,9 @@ def main():
             pygame.draw.rect(screen,L1["grass_d"],(0,SH-110,SW,110))
             pygame.draw.rect(screen,L1["grass_l"],(0,SH-110,SW,14))
             for c in clouds: draw_cloud(screen,int(c["x"]-0),int(c["y"]),c["w"])
-            # Showcase Luna i mitten av menyn
-            _sc_rect = pygame.Rect(int(showcase_x), int(showcase_y), 78, 105)
-            draw_fox(screen, _sc_rect, 0,
-                     showcase_state, showcase_frame, showcase_dir, mtick)
-            # Mark-linje under Luna i menyn
-            pygame.draw.rect(screen, L1["grass_l"],
-                (0, SHOWCASE_FLOOR + 104, SW, 6))
+            # draw_fox(screen,int(mfx),SH-170,True,1.0,1.0,mtick,3)
+            img = ANIMATIONS["idle"][0]
+            screen.blit(img, (int(mfx), SH - 170))
 
             ov=pygame.Surface((680,260),pygame.SRCALPHA); ov.fill((10,8,40,178))
             screen.blit(ov,(SW//2-340,78))
@@ -1717,9 +1492,10 @@ def main():
             pygame.draw.circle(screen,L1["sun"],(SW-130,100),56)
             pygame.draw.rect(screen,L1["grass_d"],(0,SH-110,SW,110))
             pygame.draw.rect(screen,L1["grass_l"],(0,SH-110,SW,14))
-            _sc_rect = pygame.Rect(int(showcase_x), int(showcase_y), 78, 105)
-            draw_fox(screen, _sc_rect, 0,
-                     showcase_state, showcase_frame, showcase_dir, mtick)
+            # draw_fox(screen,int(mfx),SH-170,True,1.0,1.0,mtick,3)
+            # draw_fox(screen, int(mfx), SH-170)
+            img = ANIMATIONS["idle"][0]
+            screen.blit(img, (int(mfx), SH - 170))
 
             pn=pygame.Surface((640,300),pygame.SRCALPHA); pn.fill((10,8,45,190))
             px,py=SW//2-320,SH//2-170
@@ -1844,23 +1620,12 @@ def main():
             if lvl==2:
                 for tx2,ty2 in TORCHES: draw_torch(screen,tx2,ty2,cam_x,atick)
 
-            # Checkpoints – placeras ovanpå närmaste plattform
-            for i, cx2 in enumerate(checks):
-                # Hitta plattform närmast checkpoint-x
-                best_plat_y = SH - 140
-                for p in plats + [mp["rect"] for mp in moving_plats]:
-                    if p.left < cx2 < p.right:
-                        best_plat_y = p.top
-                        break
-                draw_checkpoint(screen, cx2, best_plat_y, cam_x, check_active[i], atick)
+            # Checkpoints
+            for i,cx2 in enumerate(checks):
+                draw_checkpoint(screen,cx2-10,SH-140,cam_x,check_active[i])
 
             # Mynt
             draw_coins(screen,coins,cam_x,atick)
-
-            # Svart katt – nivåmål (ej på boss-nivå 3)
-            if lvl in CAT_POS and not boss_fight:
-                cat_x, cat_plat_y = CAT_POS[lvl]
-                draw_cat(screen, cat_x, cat_plat_y - CAT_H//2, cam_x, atick)
 
             # Meteorer (nivå 3)
             if lvl==3:
@@ -1931,10 +1696,18 @@ def main():
             update_parts(screen,parts,cam_x)
 
 
-            # Räven – rita med korrekt sprite och nuvarande animation
-            draw_fox(screen, prect, cam_x,
-                     current_anim, anim_frame, fright, atick,
-                     invincible > 0)
+            # Räven
+
+            # Räven
+            draw_fox(screen, prect, cam_x, invincible > 0)
+            # draw_fox(screen, prect.x - int(cam_x), prect.y, invincible > 0)
+           
+            # menu_rect = pygame.Rect(int(mfx), SH - 170, 78, 105)
+            # draw_fox(screen, menu_rect, 0)
+
+            # # Räven
+            # draw_fox(screen,prect.x-int(cam_x),prect.y,
+            #          fright,jsq,jst,atick,vx,invincible>0)
 
             # HUD
             draw_hud(screen,pname[0],score,gtime,lives,lvl,dash_cd,djump_avail)
@@ -1948,18 +1721,10 @@ def main():
             if state==S_TRANS and trans_alpha>0:
                 fade_surf.set_alpha(trans_alpha)
                 screen.blit(fade_surf,(0,0))
-                if trans_alpha > 200:
-                    lvl_names = {
-                        2: "Nivå 2 – Grottans Djup",
-                        3: "Nivå 3 – Vulkanen",
-                    }
-                    lbl = lvl_names.get(trans_target, f"Nivå {trans_target}")
-                    # Rubrik
-                    msg = fb.render(lbl, True, GOLD)
-                    screen.blit(msg, msg.get_rect(center=(SW//2, SH//2 - 20)))
-                    # Undertitel
-                    sub = fs.render("Luna hittade katten! Äventyret fortsätter...", True, (200, 255, 200))
-                    screen.blit(sub, sub.get_rect(center=(SW//2, SH//2 + 30)))
+                if trans_alpha>200:
+                    lbl="NIVA 3 – VULKANEN!" if trans_target==3 else f"NIVA {trans_target}!"
+                    msg=fb.render(lbl,True,GOLD)
+                    screen.blit(msg,msg.get_rect(center=(SW//2,SH//2)))
 
         elif state==S_DEAD:
             screen.blit(sky1 if lvl==1 else (sky2 if lvl==2 else sky3),(0,0))
