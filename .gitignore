@@ -1,0 +1,13 @@
+
+
+luna_save.json
+*backup*.py
+*.code-workspace
+Makefile
+raw bilder/
+raw_bilder/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+EOF
