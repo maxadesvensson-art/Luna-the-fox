@@ -1,26 +1,41 @@
-# Python cache
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Spel-specifika filer
+# Speldata och sparfiler
 luna_save.json
 *.json.bak
+highscore.json
+save*.json
 
-# Backup-filer
+# Backup och temporära filer
 *backup*.py
 *.bak
 *~
+*.tmp
 
-# Raw/original bilder (stora och onödiga på Git)
+# Raw / originalfiler (stora och onödiga)
 raw bilder/
 raw_bilder/
-raw bilder/*
-raw_bilder/*
+raw/
+original/
 
-# Andra onödiga filer
+# Editor och workspace filer
+*.code-workspace
+.vscode/
+.idea/
+
+# Systemfiler
 .DS_Store
 Thumbs.db
-*.code-workspace
-Makefile
+
+# Loggar och debug
+*.log
+debug/
+
+# Stora filer (om du får det senare)
+*.mp4
+*.wav
+*.ogg
