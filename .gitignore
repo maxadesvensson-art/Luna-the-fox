@@ -1,13 +1,26 @@
-
-
-luna_save.json
-*backup*.py
-*.code-workspace
-Makefile
-raw bilder/
-raw_bilder/
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Spel-specifika filer
+luna_save.json
+*.json.bak
+
+# Backup-filer
+*backup*.py
+*.bak
+*~
+
+# Raw/original bilder (stora och onödiga på Git)
+raw bilder/
+raw_bilder/
+raw bilder/*
+raw_bilder/*
+
+# Andra onödiga filer
 .DS_Store
 Thumbs.db
-EOF
+*.code-workspace
+Makefile
