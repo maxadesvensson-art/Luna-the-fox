@@ -1304,11 +1304,12 @@ def main():
         mx,my=pygame.mouse.get_pos()
 
         for ev in pygame.event.get():
-            if ev.type==pygame.QUIT: running=False
+            if ev.type == pygame.QUIT: 
+                running = False
 
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN and (pygame.key.get_mods() & pygame.KMOD_ALT):
-                    # Toggle fullscreen
+            # Alt + Enter = toggla fullscreen
+            elif ev.type == pygame.KEYDOWN:
+                if ev.key == pygame.K_RETURN and (pygame.key.get_mods() & pygame.KMOD_ALT):
                     pygame.display.toggle_fullscreen()
 
 
