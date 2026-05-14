@@ -16,7 +16,7 @@ pygame.init()
 # Fullskärm + intern upplösning 1280x720 (skalas automatiskt)
 SW, SH, FPS = 1280, 720, 60
 
-# Fullskärm utan borders
+# Fullskärm utan kanter
 screen = pygame.display.set_mode((SW, SH), pygame.FULLSCREEN | pygame.SCALED)
 pygame.display.set_caption("Luna the Fox")
 
