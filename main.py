@@ -626,9 +626,10 @@ def update_animation():
             anim_timer = 0.0
             anim_frame = (anim_frame + 1) % len(ANIMATIONS[current_anim])
 
+    # facing_right = fright
+
+    if abs(vx) > 0.1:
     facing_right = fright
-
-
 
 
 
