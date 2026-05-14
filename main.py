@@ -13,9 +13,14 @@ import pygame, sys, math, random, json, os, array
 pygame.mixer.pre_init(44100, -16, 1, 512)
 pygame.init()
 
+# Fullskärm + intern upplösning 1280x720 (skalas automatiskt)
 SW, SH, FPS = 1280, 720, 60
-screen = pygame.display.set_mode((SW, SH))
+
+# Fullskärm utan borders
+screen = pygame.display.set_mode((SW, SH), pygame.FULLSCREEN | pygame.SCALED)
 pygame.display.set_caption("Luna the Fox")
+
+# Alt+Enter för att toggla fullscreen (bra att ha)
 clock  = pygame.time.Clock()
 
 SAVE_FILE = "luna_save.json"
@@ -1300,6 +1305,16 @@ def main():
 
         for ev in pygame.event.get():
             if ev.type==pygame.QUIT: running=False
+
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN and (pygame.key.get_mods() & pygame.KMOD_ALT):
+                    # Toggle fullscreen
+                    pygame.display.toggle_fullscreen()
+
+
+
+
+
 
             # TRANSITION: blockera input
             if state==S_TRANS: continue
