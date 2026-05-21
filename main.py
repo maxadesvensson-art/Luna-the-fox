@@ -13,14 +13,9 @@ import pygame, sys, math, random, json, os, array
 pygame.mixer.pre_init(44100, -16, 1, 512)
 pygame.init()
 
-# Fullskärm + intern upplösning 1280x720 (skalas automatiskt)
 SW, SH, FPS = 1280, 720, 60
-
-# Fullskärm utan kanter
-screen = pygame.display.set_mode((SW, SH), pygame.FULLSCREEN | pygame.SCALED)
+screen = pygame.display.set_mode((SW, SH))
 pygame.display.set_caption("Luna the Fox")
-
-# Alt+Enter för att toggla fullscreen (bra att ha)
 clock  = pygame.time.Clock()
 
 SAVE_FILE = "luna_save.json"
@@ -368,35 +363,40 @@ sky3 = make_sky(L3["sky_top"], L3["sky_bot"])
 # ═══════════════════════════════════════════
 # (x, y, w, h)
 PLATS_1 = [
-    (0,   555, 880,200),
-    (940, 455, 360, 22),
-    (1360,355, 300, 22),
-    (1750,440, 380, 22),
-    (2210,350, 290, 22),
-    (2575,440, 330, 22),
-    (2985,345, 270, 22),
-    (3340,415, 340, 22),
-    (3760,315, 250, 22),
-    (4080,415, 310, 22),
-    (4450,555,1100,200),
+    (0,    555,  920, 200),   # startmark
+    ( 980, 460,  280,  22),   # zon1-a
+    (1330, 370,  240,  22),   # zon1-b
+    (1640, 460,  320,  22),   # zon2-a (vildsvin)
+    (2030, 355,  260,  22),   # zon2-b
+    (2360, 450,  200,  22),   # zon3-a (orm+vildsvin)
+    (2620, 340,  220,  22),   # zon3-b
+    (2900, 440,  240,  22),   # zon3-c
+    (3210, 330,  180,  22),   # zon4-a (kombination)
+    (3450, 430,  200,  22),   # zon4-b
+    (3710, 310,  160,  22),   # zon4-c
+    (3940, 420,  380,  22),   # zon5 (vaxtmonster boss)
+    (4380, 340,  220,  22),   # zon6-a
+    (4670, 555, 1000, 200),   # slutmark
 ]
-# Checkpoints: x-position (världskoord) som aktiveras
-CHECKS_1 = [2000, 3500]
+CHECKS_1 = [2200, 3600]
 
 PLATS_2 = [
-    (0,   540, 760,200),
-    (820, 440, 280, 22),
-    (1170,340, 260, 22),
-    (1530,440, 300, 22),
-    (1920,330, 240, 22),
-    (2260,430, 280, 22),
-    (2640,320, 260, 22),
-    (2990,420, 300, 22),
-    (3380,310, 240, 22),
-    (3710,400, 280, 22),
-    (4080,535,1000,200),
+    (0,    540,  800, 200),   # startmark
+    ( 860, 445,  260,  22),   # zon1-a (spindel)
+    (1180, 355,  220,  22),   # zon1-b
+    (1460, 445,  280,  22),   # zon2-a (uggla)
+    (1800, 340,  200,  22),   # zon2-b
+    (2070, 440,  180,  22),   # zon3-a
+    (2310, 330,  180,  22),   # zon3-b
+    (2550, 440,  200,  22),   # zon3-c
+    (2810, 320,  150,  22),   # zon4-a (trånga hopp)
+    (3010, 420,  150,  22),   # zon4-b
+    (3210, 310,  150,  22),   # zon4-c
+    (3430, 420,  280,  22),   # zon5-a (kombination)
+    (3770, 320,  240,  22),   # zon5-b
+    (4080, 535, 1000, 200),   # slutmark
 ]
-CHECKS_2 = [1700, 3100]
+CHECKS_2 = [1800, 3200]
 
 # Nivå 3 – Vulkan (rörliga plattformar markerade med move_*)
 # Format statisk: (x, y, w, h)
@@ -458,22 +458,28 @@ TORCHES = [
 
 # Fiender per nivå: (x, y, patrol_w, speed_min, speed_max)
 ENEMIES_1 = [
-    # (x, plattformens_top_y, patrol_w, spd_min, spd_max)
-    (1150, 455, 200, 1.5, 2.5),   # plattform 940/455
-    (1900, 355, 200, 1.8, 2.8),   # plattform 1360/355
-    (2000, 440, 220, 2.0, 3.2),   # plattform 1750/440
-    (2400, 350, 200, 2.2, 3.5),   # plattform 2210/350
-    (4150, 415, 200, 2.5, 3.8),   # plattform 4080/415
+    # (x, plat_top_y, patrol_w, spd_min, spd_max, typ)
+    (1700, 460, 220, 1.8, 2.5, "vildsvin"),    # zon2
+    (2100, 355, 180, 1.5, 2.0, "orm"),
+    (2450, 460, 200, 2.0, 2.8, "vildsvin"),    # zon3
+    (2700, 340, 140, 1.6, 2.2, "orm"),
+    (2980, 440, 160, 2.2, 3.0, "vildsvin"),    # zon4
+    (3300, 330, 120, 1.8, 2.5, "orm"),
+    (4120, 420,   0, 0.0, 0.0, "vaxtmonster"), # zon5 boss
 ]
 ENEMIES_2 = [
-    # (x, plattformens_top_y, patrol_w, spd_min, spd_max)
-    ( 950,  440, 160, 2.0, 3.0),   # plattform 820/440
-    (1300,  340, 180, 2.2, 3.2),   # plattform 1170/340
-    (1700,  440, 160, 1.8, 2.8),   # plattform 1530/440
-    (2100,  330, 150, 2.5, 3.5),   # plattform 1920/330
-    (2400,  430, 160, 2.8, 3.8),   # plattform 2260/430
-    (2800,  320, 150, 2.5, 3.5),   # plattform 2640/320
-    (3850,  400, 180, 3.0, 4.2),   # plattform 3710/400
+    # (x, plat_top_y, patrol_w, spd_min, spd_max, typ)
+    ( 990, 445, 100, 0.8, 1.2, "spindel"),     # zon1
+    (1320, 355, 200, 2.0, 2.8, "uggla"),       # zon2
+    (1610, 445, 160, 1.8, 2.5, "spindel"),
+    (1940, 340, 140, 2.2, 3.0, "skelett"),     # zon3
+    (2200, 440, 120, 2.0, 2.8, "uggla"),
+    (2430, 330, 130, 1.8, 2.5, "spindel"),
+    (2930, 420, 100, 2.5, 3.2, "skelett"),     # zon4
+    (3100, 310, 120, 2.2, 3.0, "uggla"),
+    (3520, 420, 200, 2.8, 3.5, "skelett"),     # zon5
+    (3680, 420, 160, 2.5, 3.2, "spindel"),
+    (3870, 320, 180, 3.0, 4.0, "uggla"),
 ]
 
 # ═══════════════════════════════════════════
@@ -551,47 +557,99 @@ def draw_fox(surf, prect, cam_x, anim="idle", frame=0, face_right=True, tick=0, 
 
 
 def draw_enemy(surf, e, cam_x, tick):
-    sx = int(e["x"] - cam_x)
-    sy = int(e["y"])
-    if sx < -60 or sx > SW + 60:
+    typ = e.get("typ", "vildsvin")
+    sx  = int(e["x"] - cam_x)
+    sy  = int(e["y"])
+    if sx < -120 or sx > SW + 120:
+        return
+    face_right = e["dir"] > 0
+    hurt       = e.get("knockback", 0) > 0
+    flip       = 1 if face_right else -1
+
+    # ── Sprite-rendering ──────────────────────────────────
+    if typ in ENEMY_SPRITES:
+        img = ENEMY_SPRITES[typ]
+        iw, ih = img.get_size()
+        dy = int(math.sin(tick * 0.07) * 6) if typ == "uggla" else 0
+        if typ == "spindel":
+            pygame.draw.line(surf, (160,160,160), (sx, sy-70), (sx, sy - ih//2), 2)
+            dy = int(math.sin(tick * 0.05) * 10)
+        draw_img = pygame.transform.flip(img, True, False) if not face_right else img
+        if hurt:
+            draw_img = draw_img.copy()
+            draw_img.fill((255,80,80,160), special_flags=pygame.BLEND_RGBA_MULT)
+        surf.blit(draw_img, (sx - iw//2, sy - ih + dy))
+        if typ == "vaxtmonster" and e.get("shoot_timer", 99) < 25:
+            pygame.draw.circle(surf, (255,100,0), (sx, sy - ih - 12), 9)
         return
 
-    flip = 1 if e["dir"] > 0 else -1
-    col = (140, 60, 180) if e.get("lvl", 1) == 2 else (80, 130, 60)
-    dark = tuple(max(0, c - 40) for c in col)
+    # ── Kod-fallback ─────────────────────────────────────
+    col_map = {"vildsvin":(110,65,35),"orm":(55,130,45),
+               "vaxtmonster":(35,120,35),"spindel":(55,30,65),
+               "uggla":(120,95,45),"skelett":(205,195,175)}
+    col  = col_map.get(typ, (100,100,100))
+    dark = tuple(max(0, c-45) for c in col)
 
-    # Kropp
-    pygame.draw.ellipse(surf, col, (sx - 18, sy - 24, 36, 28))
-    pygame.draw.ellipse(surf, dark, (sx - 18, sy - 24, 36, 10))
-
-    # Ben
-    ls = math.sin(tick * 0.22) * 8
-    for lx, la in [(sx - 8, ls), (sx + 8, -ls)]:
-        pygame.draw.rect(surf, dark, (lx - 3, sy + 4, 7, 14 + int(abs(la))), border_radius=3)
-
-    # Huvud
-    pygame.draw.ellipse(surf, col, (sx - 14, sy - 48, 28, 26))
-
-    # Ögon
-    ex2 = sx - 4 + flip * 3
-    ey2 = sy - 40
-    pygame.draw.circle(surf, (220, 30, 30), (ex2, ey2), 5)
-    pygame.draw.circle(surf, (255, 255, 255), (ex2 + flip, ey2 - 1), 2)
-
-    # Tänder
-    for ti in range(3):
-        tx2 = sx - 6 + ti * 6
-        pygame.draw.rect(surf, WHITE, (tx2, sy - 28, 4, 6), border_radius=2)
-
-
-
-
-
-
-
-
-
-
+    if typ == "spindel":
+        pygame.draw.line(surf,(150,150,150),(sx,sy-75),(sx,sy-26),2)
+        pygame.draw.circle(surf,col,(sx,sy-14),18)
+        for i in range(4):
+            a=math.pi/5+i*math.pi/3.2+math.sin(tick*0.14)*0.3
+            pygame.draw.line(surf,dark,(sx,sy-14),(sx+int(math.cos(a)*30),sy-14+int(math.sin(a)*15)),3)
+            pygame.draw.line(surf,dark,(sx,sy-14),(sx-int(math.cos(a)*30),sy-14+int(math.sin(a)*15)),3)
+        pygame.draw.circle(surf,(200,20,20),(sx-7,sy-20),4)
+        pygame.draw.circle(surf,(200,20,20),(sx+7,sy-20),4)
+    elif typ == "uggla":
+        dy2=int(math.sin(tick*0.07)*6)
+        wf=int(math.sin(tick*0.18)*14)
+        pygame.draw.ellipse(surf,dark,(sx-40,sy-28+wf,28,16))
+        pygame.draw.ellipse(surf,dark,(sx+12,sy-28+wf,28,16))
+        pygame.draw.ellipse(surf,col,(sx-16,sy-42+dy2,32,42))
+        pygame.draw.circle(surf,(255,215,40),(sx-8,sy-28+dy2),8)
+        pygame.draw.circle(surf,(255,215,40),(sx+8,sy-28+dy2),8)
+        pygame.draw.circle(surf,(10,10,10),(sx-8+flip,sy-28+dy2),4)
+        pygame.draw.circle(surf,(10,10,10),(sx+8+flip,sy-28+dy2),4)
+        pygame.draw.polygon(surf,(220,140,20),[(sx-4,sy-20+dy2),(sx+4,sy-20+dy2),(sx,sy-13+dy2)])
+    elif typ == "skelett":
+        ls2=math.sin(tick*0.22)*7
+        for lx2,la2 in [(sx-8,ls2),(sx+8,-ls2)]:
+            pygame.draw.rect(surf,col,(lx2-3,sy-18,6,18+int(abs(la2))),border_radius=3)
+        pygame.draw.rect(surf,col,(sx-13,sy-44,26,28),border_radius=4)
+        pygame.draw.circle(surf,col,(sx,sy-56),14)
+        pygame.draw.ellipse(surf,(20,20,20),(sx-9,sy-52,8,9))
+        pygame.draw.ellipse(surf,(20,20,20),(sx+1,sy-52,8,9))
+        for ti in range(3):
+            pygame.draw.rect(surf,(190,190,190),(sx-7+ti*6,sy-42,4,7))
+    elif typ == "vaxtmonster":
+        pygame.draw.rect(surf,(55,95,25),(sx-10,sy-52,20,52),border_radius=5)
+        pygame.draw.circle(surf,col,(sx,sy-62),30)
+        pygame.draw.circle(surf,(70,170,35),(sx,sy-62),18)
+        pygame.draw.circle(surf,(200,25,25),(sx-11,sy-68),7)
+        pygame.draw.circle(surf,(200,25,25),(sx+11,sy-68),7)
+        for ti in range(4):
+            pygame.draw.rect(surf,(245,195,40),(sx-13+ti*9,sy-55,6,9))
+        if e.get("shoot_timer",99) < 25:
+            pygame.draw.circle(surf,(255,100,0),(sx,sy-96),9)
+    elif typ == "orm":
+        pts=[]
+        for i in range(8):
+            ox2=int(math.sin(tick*0.12+i*0.7)*(8-i))
+            pts.append((sx-flip*i*9+ox2, sy-10+int(math.cos(tick*0.1+i)*4)))
+        if len(pts)>=2:
+            pygame.draw.lines(surf,col,False,pts,14)
+            pygame.draw.lines(surf,dark,False,pts,5)
+        hx2,hy2=pts[0]
+        pygame.draw.circle(surf,col,(hx2,hy2),12)
+        pygame.draw.circle(surf,(200,25,25),(hx2+flip*4,hy2-3),4)
+        pygame.draw.line(surf,(210,25,25),(hx2+flip*12,hy2+2),(hx2+flip*20,hy2),2)
+    else:  # vildsvin
+        pygame.draw.ellipse(surf,col,(sx-24,sy-32,48,32))
+        pygame.draw.ellipse(surf,col,(sx+flip*10,sy-38,30,24))
+        pygame.draw.line(surf,(235,215,175),(sx+flip*33,sy-24),(sx+flip*40,sy-15),3)
+        pygame.draw.circle(surf,(200,25,25),(sx+flip*22,sy-32),4)
+        ls3=math.sin(tick*0.25)*8
+        for lx3,la3 in [(sx-12,ls3),(sx+2,-ls3),(sx-2,ls3),(sx+12,-ls3)]:
+            pygame.draw.rect(surf,dark,(lx3-3,sy,6,14+int(abs(la3))),border_radius=3)
 
 def update_animation():
     global current_anim, anim_frame, anim_timer, facing_right
@@ -628,7 +686,7 @@ def update_animation():
 
     facing_right = fright
 
-    
+
 
 
 
@@ -1166,8 +1224,6 @@ def main():
                 anim_frame = (anim_frame + 1) % len(ANIMATIONS[current_anim])
 
         facing_right = fright
-
-        
     # ================================================================
 
 
@@ -1236,13 +1292,25 @@ def main():
         coyote=0; jbuf=0
         cat_touched=False
 
-        for (ex,ey,pw,smin,smax) in ed:
-            spd=random.uniform(smin,smax)
-            # ey = plattformens top-y, fienden ska stå ovanpå → y = ey - h
-            enemies.append({"x":float(ex),"y":float(ey)-54,
-                            "w":36,"h":54,"dir":1.0,
-                            "patrol_x":float(ex),"patrol_w":pw,
-                            "spd":spd,"tick":0,"lvl":lvl,"knockback":0})
+        for entry in ed:
+            ex,ey,pw,smin,smax,typ = entry
+            spd = random.uniform(smin, smax)
+            # Uggla/spindel flyger – placera högre
+            fly_types = ("uggla", "spindel")
+            ey_off = 80 if typ in fly_types else 54
+            enemies.append({
+                "x": float(ex), "y": float(ey) - ey_off,
+                "w": 36, "h": 54,
+                "dir": 1.0,
+                "patrol_x": float(ex), "patrol_w": float(pw),
+                "spd": spd, "tick": 0,
+                "lvl": lvl, "knockback": 0,
+                "typ": typ,
+                # Växtmonster-specifikt
+                "shoot_timer": random.randint(60,120) if typ=="vaxtmonster" else 999,
+                # Uggla: dyk-läge
+                "diving": False, "dive_timer": 0,
+            })
 
         if lvl==1:   play_music(MUS_1)
         elif lvl==2: play_music(MUS_2)
@@ -1306,18 +1374,7 @@ def main():
         mx,my=pygame.mouse.get_pos()
 
         for ev in pygame.event.get():
-            if ev.type == pygame.QUIT: 
-                running = False
-
-            # Alt + Enter = toggla fullscreen
-            elif ev.type == pygame.KEYDOWN:
-                if ev.key == pygame.K_RETURN and (pygame.key.get_mods() & pygame.KMOD_ALT):
-                    pygame.display.toggle_fullscreen()
-
-
-
-
-
+            if ev.type==pygame.QUIT: running=False
 
             # TRANSITION: blockera input
             if state==S_TRANS: continue
@@ -1558,22 +1615,88 @@ def main():
                                 play_sfx(SND_DEATH); stop_music()
                                 add_score(save_data,pname[0],score,gtime); state=S_DEAD
 
-            # ── Fiender ──
+            # ── Fiender med typ-beteende ──────────────────────
             for e in enemies[:]:
-                e["tick"]+=1
-                if e["knockback"]>0: e["knockback"]-=1; continue
-                e["x"]+=e["spd"]*e["dir"]
-                if e["x"]>e["patrol_x"]+e["patrol_w"] or e["x"]<e["patrol_x"]: e["dir"]*=-1
-                er=pygame.Rect(int(e["x"]-e["w"]//2),int(e["y"]),e["w"],e["h"])
-                if prect.colliderect(er) and invincible==0:
-                    if prect.bottom<er.centery and vy>0:
-                        enemies.remove(e); vy=-12; score+=30
-                        ec=LAVA_PART if lvl==3 else ([(140,60,180),(180,80,220)] if lvl==2 else [(80,130,60),(120,180,80)])
-                        spawn_parts(parts,e["x"],e["y"],12,cols=ec)
+                e["tick"] += 1
+                typ = e.get("typ","vildsvin")
+
+                if e["knockback"] > 0:
+                    e["knockback"] -= 1
+                    continue
+
+                # Beteende per typ
+                if typ == "vaxtmonster":
+                    # Stationär – skjuter taggar
+                    e["shoot_timer"] -= 1
+                    if e["shoot_timer"] <= 0:
+                        e["shoot_timer"] = random.randint(90,150)
+                        # Skjut en "tagg" (vi skapar en partikel mot spelaren)
+                        dx = prect.centerx - e["x"]
+                        dy = prect.centery - e["y"]
+                        dist = max(1, math.hypot(dx,dy))
+                        parts.append({"x":e["x"],"y":e["y"]-60,
+                            "vx":dx/dist*6,"vy":dy/dist*6,
+                            "life":1.0,"decay":0.018,"r":7,
+                            "col":(80,200,40),"is_thorn":True})
+
+                elif typ == "uggla":
+                    # Flyger + dyker mot spelaren med jämna mellanrum
+                    e["x"] += e["spd"] * e["dir"]
+                    if e["patrol_w"] > 0:
+                        if e["x"] > e["patrol_x"]+e["patrol_w"] or e["x"] < e["patrol_x"]:
+                            e["dir"] *= -1
+                    # Dyk
+                    e["dive_timer"] = e.get("dive_timer",0) + 1
+                    if e["dive_timer"] > 180 and not e.get("diving"):
+                        if abs(e["x"] - prect.centerx) < 200:
+                            e["diving"] = True; e["dive_timer"] = 0
+                    if e.get("diving"):
+                        e["y"] += 5
+                        if e["y"] > e.get("base_y", e["y"]) + 120 or on_gnd:
+                            e["diving"] = False
+                            e["y"] = e.get("base_y", e["y"])
+                    else:
+                        if "base_y" not in e: e["base_y"] = e["y"]
+
+                elif typ == "spindel":
+                    # Hänger stilla men faller ner om Luna är under
+                    if abs(e["x"] - prect.centerx) < 60 and prect.y > e["y"]:
+                        e["y"] = min(e["y"] + 3, e.get("hang_y",e["y"]) + 80)
+                    else:
+                        if "hang_y" not in e: e["hang_y"] = e["y"]
+                        e["y"] = max(e["y"] - 2, e["hang_y"])
+                    # Liten sidorörelse
+                    e["x"] += e["spd"] * e["dir"] * 0.4
+                    if e["patrol_w"]>0 and (e["x"]>e["patrol_x"]+e["patrol_w"] or e["x"]<e["patrol_x"]):
+                        e["dir"] *= -1
+
+                else:
+                    # Standard patrol (vildsvin, orm, skelett)
+                    e["x"] += e["spd"] * e["dir"]
+                    if e["patrol_w"]>0 and (e["x"]>e["patrol_x"]+e["patrol_w"] or e["x"]<e["patrol_x"]):
+                        e["dir"] *= -1
+
+                er = pygame.Rect(int(e["x"]-e["w"]//2), int(e["y"]), e["w"], e["h"])
+                if prect.colliderect(er) and invincible == 0:
+                    if prect.bottom < er.centery and vy > 0:
+                        enemies.remove(e); vy = -12; score += 30
+                        ec = LAVA_PART if lvl==3 else ([(140,60,180),(180,80,220)] if lvl==2 else [(80,130,60),(120,180,80)])
+                        spawn_parts(parts, e["x"], e["y"], 12, cols=ec)
                         play_sfx(SND_COIN)
                     else:
+                        lives -= 1; invincible = 90; play_sfx(SND_HIT)
+                        spawn_parts(parts, prect.centerx, prect.centery, 15)
+                        if lives <= 0:
+                            play_sfx(SND_DEATH); stop_music()
+                            add_score(save_data,pname[0],score,gtime); state=S_DEAD
+
+            # Tagg-projektiler skadar Luna
+            for p in parts[:]:
+                if p.get("is_thorn") and invincible==0:
+                    pr=pygame.Rect(int(p["x"]-p["r"]),int(p["y"]-p["r"]),p["r"]*2,p["r"]*2)
+                    if pr.colliderect(prect):
                         lives-=1; invincible=90; play_sfx(SND_HIT)
-                        spawn_parts(parts,prect.centerx,prect.centery,15)
+                        parts.remove(p)
                         if lives<=0:
                             play_sfx(SND_DEATH); stop_music()
                             add_score(save_data,pname[0],score,gtime); state=S_DEAD
