@@ -292,14 +292,6 @@ def load_enemy_sprites():
     print()
 
 
-current_anim = "idle"
-anim_frame = 0
-anim_timer = 0
-facing_right = True
-
-
-
-
 def load_animation(folder, target_width=78, target_height=105):
     """Anpassad för dina exakta filnamn"""
     frames = []
@@ -1077,7 +1069,8 @@ def update_parts(surf,parts,cam_x):
 # ═══════════════════════════════════════════
 def make_coins(plat_data):
     coins=[]
-    for i,(px,py,pw,_) in enumerate(plat_data[1:-1],1):
+    # FIX #8: enumerate-index i användes aldrig – borttaget
+    for (px,py,pw,_) in plat_data[1:-1]:
         coins.append({"x":px+pw//2,"y":py-30,"r":10,"collected":False})
     return coins
 
@@ -1184,51 +1177,22 @@ def main():
     prect=pygame.Rect(150,380,44,52)
 
 
-    # Animation
-    current_anim = "idle"
-    anim_frame = 0
-    anim_timer = 0
-    facing_right = True
+    # # Animation
+    # current_anim = "idle"
+    # anim_frame = 0
+    # anim_timer = 0
+    # facing_right = True
 
     # Ändra storlek på spelaren till den nya större räven
     prect = pygame.Rect(150, 380, 78, 105)   # ← uppdaterad storlek
 
+    # Animationsvariabler – lokala i main() så update_animation kan använda nonlocal
+    current_anim = "idle"
+    anim_frame   = 0
+    anim_timer   = 0.0
+    facing_right = True
 
 
-    # ====================== ANIMATION FUNKTION ======================
-    def update_animation():
-        nonlocal current_anim, anim_frame, anim_timer, facing_right
-
-        anim_timer += 1 / FPS
-
-        if dashing:
-            new_anim = "dash"
-        elif invincible > 0:
-            new_anim = "hit"
-        elif not on_gnd:
-            new_anim = "double_jump" if not djump_avail else "jump"
-        elif current_anim == "idle" and abs(vx) > 1.8:
-            new_anim = "run"
-        elif current_anim == "run" and abs(vx) < 0.4:
-            new_anim = "idle"
-        elif current_anim not in ("idle","run"):
-            new_anim = "run" if abs(vx) > 1.8 else "idle"
-        else:
-            new_anim = current_anim
-
-        if new_anim != current_anim:
-            current_anim = new_anim
-            anim_frame = 0
-            anim_timer = 0
-
-        if current_anim in ANIMATIONS and ANIMATIONS[current_anim]:
-            speed = 0.07 if current_anim == "run" else 0.16
-            if anim_timer >= speed:
-                anim_timer = 0
-                anim_frame = (anim_frame + 1) % len(ANIMATIONS[current_anim])
-
-        facing_right = fright
-    # ================================================================
 
 
 
@@ -1250,6 +1214,11 @@ def main():
     trans_alpha=0; trans_dir=0; trans_target=None
     checkpoint_pos=None
     lava_wave=0.0
+    # FIX #9: render_tick aldrig nollställs – undviker torch-flicker vid reset
+    render_tick = 0
+    # FIX #2: subpixel-ackumulatorer för mjuk rörelse
+    sub_x = 0.0
+    sub_y = 0.0
 
     def reset(level=1, from_checkpoint=False):
         nonlocal plats,moving_plats,coins,parts,enemies,checks,check_active
@@ -1258,6 +1227,7 @@ def main():
         nonlocal atick,jsq,jst,score,gtime,lives,lvl
         nonlocal djump_avail,jheld,jht,dash_cd,dash_dur,dashing
         nonlocal invincible,coyote,jbuf,clouds,stars,checkpoint_pos,lava_wave
+        nonlocal sub_x,sub_y
 
         lvl=level
         if lvl==1:   pd,ed,chk = PLATS_1,ENEMIES_1,CHECKS_1
@@ -1290,6 +1260,7 @@ def main():
         prect=pygame.Rect(sx,sy,78,105)
         vx=vy=0.0; on_gnd=False; fright=True
         atick=0; jsq=1.0; jst=1.0
+        sub_x=0.0; sub_y=0.0   # FIX #2: nollställ subpixel-ackumulatorer vid reset
         if not from_checkpoint: score=0; gtime=0; lives=3
         djump_avail=True; jheld=False; jht=0
         dash_cd=0; dash_dur=0; dashing=False; invincible=0
@@ -1301,7 +1272,9 @@ def main():
             spd = random.uniform(smin, smax)
             # Uggla/spindel flyger – placera högre
             fly_types = ("uggla", "spindel")
-            ey_off = 80 if typ in fly_types else 54
+            # ey är plattformens topp-y. Markfiender ska stå på toppen → ey_off=0
+            # Flygfiender placeras högre upp
+            ey_off = 80 if typ in fly_types else 0
             enemies.append({
                 "x": float(ex), "y": float(ey) - ey_off,
                 "w": 36, "h": 54,
@@ -1331,7 +1304,7 @@ def main():
 
     # ── Animation-uppdatering (inuti main för att nå lokala variabler) ──
     def update_animation():
-        nonlocal current_anim, anim_frame, anim_timer
+        nonlocal current_anim, anim_frame, anim_timer, facing_right
 
         anim_timer += 1.0 / FPS
 
@@ -1341,15 +1314,12 @@ def main():
         elif invincible > 0:
             new_anim = "hit"
         elif not on_gnd:
+            # I luften – välj jump eller double_jump
             new_anim = "double_jump" if not djump_avail else "jump"
-        elif current_anim == "idle" and abs(vx) > 1.8:
+        elif abs(vx) > 1.0:
             new_anim = "run"
-        elif current_anim == "run" and abs(vx) < 0.4:
-            new_anim = "idle"
-        elif current_anim not in ("idle","run"):
-            new_anim = "run" if abs(vx) > 1.8 else "idle"
         else:
-            new_anim = current_anim
+            new_anim = "idle"
 
         # Återställ frame vid animationsbyte
         if new_anim != current_anim:
@@ -1373,13 +1343,16 @@ def main():
                 anim_timer = 0.0
                 anim_frame = (anim_frame + 1) % len(ANIMATIONS[current_anim])
 
+        # Uppdatera riktning
+        facing_right = fright
+
     # Fade-overlay
     fade_surf=pygame.Surface((SW,SH)); fade_surf.fill((0,0,0))
 
     running=True
     while running:
         clock.tick(FPS)
-        mtick+=1; blink+=1; atick+=1
+        mtick+=1; blink+=1; atick+=1; render_tick+=1   # FIX #9: render_tick räknar alltid upp
         mx,my=pygame.mouse.get_pos()
 
         for ev in pygame.event.get():
@@ -1428,6 +1401,8 @@ def main():
                     if ev.key==pygame.K_r:
                         if state==S_DEAD and checkpoint_pos:
                             reset(lvl,from_checkpoint=True)
+                        elif state==S_WIN:
+                            reset(1)   # FIX #5: S_WIN startar alltid om från nivå 1 med nollad score
                         else:
                             reset(lvl)
                         state=S_PLAY
@@ -1487,7 +1462,12 @@ def main():
             if not any(keys2[k] for k in (pygame.K_SPACE,pygame.K_w,pygame.K_UP)): jheld=False
 
             vy=min(vy+GRAV,24)
-            prect.x+=int(vx); prect.y+=int(vy)
+
+            # FIX #2: subpixel-ackumulatorer – rör aldrig 0 px även vid låg fart
+            sub_x += vx
+            sub_y += vy
+            move_x = int(sub_x); sub_x -= move_x
+            move_y = int(sub_y); sub_y -= move_y
 
             # ── Rörliga plattformar (nivå 3) ──
             all_collidable = list(plats)
@@ -1500,17 +1480,34 @@ def main():
                         mp["rect"].y=int(mp["oy"]+math.sin(t2)*mp["amp"])
                     all_collidable.append(mp["rect"])
 
-            # Kollision
-            was_on=on_gnd; on_gnd=False
+            # FIX #1: Kollision per axel separat – förhindrar fastna i väggar
+            # X-axel
+            prect.x += move_x
             for p in all_collidable:
                 if prect.colliderect(p):
-                    if vy>0 and prect.bottom-vy<=p.top+16:
-                        prect.bottom=p.top; vy=0; on_gnd=True
+                    if move_x > 0: prect.right = p.left; vx = 0; sub_x = 0.0
+                    elif move_x < 0: prect.left = p.right; vx = 0; sub_x = 0.0
+
+            # Y-axel
+            was_on=on_gnd; on_gnd=False
+            prect.y += move_y
+            for p in all_collidable:
+                if prect.colliderect(p):
+                    if move_y >= 0 and prect.bottom - move_y <= p.top + 16:
+                        prect.bottom=p.top; vy=0; sub_y=0.0; on_gnd=True
                         coyote=6; djump_avail=True
                         if jst>1.05: jsq=0.68; play_sfx(SND_LAND)
-                    elif vy<0: prect.top=p.bottom; vy=0
-                    elif vx>0 and prect.right-abs(vx)<=p.left+8: prect.right=p.left; vx=0
-                    elif vx<0 and prect.left+abs(vx)>=p.right-8: prect.left=p.right; vx=0
+                    elif move_y < 0:
+                        prect.top=p.bottom; vy=0; sub_y=0.0
+
+            # Extra check: om spelaren precis nuddar plattform underifrån (move_y==0 men redan överlappande)
+            if not on_gnd:
+                feet = pygame.Rect(prect.x + 2, prect.bottom, prect.width - 4, 4)
+                for p in all_collidable:
+                    if feet.colliderect(p):
+                        prect.bottom = p.top; vy = 0; sub_y = 0.0; on_gnd = True
+                        coyote = 6; djump_avail = True
+                        break
 
             if was_on and not on_gnd: coyote=6
 
@@ -1661,7 +1658,8 @@ def main():
                             e["diving"] = True; e["dive_timer"] = 0
                     if e.get("diving"):
                         e["y"] += 5
-                        if e["y"] > e.get("base_y", e["y"]) + 120 or on_gnd:
+                        # FIX #4: använd ugglans egna position, inte spelarens on_gnd
+                        if e["y"] > e.get("base_y", e["y"]) + 120:
                             e["diving"] = False
                             e["y"] = e.get("base_y", e["y"])
                     else:
@@ -1700,15 +1698,16 @@ def main():
                             add_score(save_data,pname[0],score,gtime); state=S_DEAD
 
             # Tagg-projektiler skadar Luna
+            # FIX #3: kollar kollision separat – update_parts hanterar decay/livslängd
             for p in parts[:]:
-                if p.get("is_thorn") and invincible==0:
-                    pr=pygame.Rect(int(p["x"]-p["r"]),int(p["y"]-p["r"]),p["r"]*2,p["r"]*2)
+                if p.get("is_thorn") and p in parts and invincible == 0:
+                    pr = pygame.Rect(int(p["x"]-p["r"]), int(p["y"]-p["r"]), p["r"]*2, p["r"]*2)
                     if pr.colliderect(prect):
-                        lives-=1; invincible=90; play_sfx(SND_HIT)
-                        parts.remove(p)
-                        if lives<=0:
+                        lives -= 1; invincible = 90; play_sfx(SND_HIT)
+                        if p in parts: parts.remove(p)
+                        if lives <= 0:
                             play_sfx(SND_DEATH); stop_music()
-                            add_score(save_data,pname[0],score,gtime); state=S_DEAD
+                            add_score(save_data, pname[0], score, gtime); state = S_DEAD
 
             # Mynt
             for c in coins:
@@ -1719,9 +1718,18 @@ def main():
                         play_sfx(SND_COIN); spawn_parts(parts,c["x"],c["y"],8)
 
             # Checkpoints
+            # FIX #6: spara y från plattformen, inte spelarens luftposition
             for i,cx2 in enumerate(checks):
                 if prect.x>cx2 and not check_active[i]:
-                    check_active[i]=True; checkpoint_pos=(prect.x,prect.y)
+                    check_active[i]=True
+                    # Hitta plattformen Luna står på för ett stabilt y
+                    chk_y = prect.y
+                    if on_gnd:
+                        for p in all_collidable:
+                            if prect.colliderect(p.inflate(4,4)):
+                                chk_y = p.top - prect.height
+                                break
+                    checkpoint_pos=(prect.x, chk_y)
 
             # Fall ur banan
             if prect.top>SH+300:
@@ -1747,8 +1755,11 @@ def main():
                     state = S_TRANS; checkpoint_pos = None
 
             # Kamera
+            # FIX #7: clamp kameran mot båda ändar
+            LEVEL_WIDTH = {1: 5700, 2: 5100, 3: 5600}.get(lvl, 5700)
             tc=prect.centerx-SW//3
-            cam_x+=(tc-cam_x)*0.11; cam_x=max(0.0,cam_x)
+            cam_x+=(tc-cam_x)*0.11
+            cam_x=max(0.0, min(cam_x, float(LEVEL_WIDTH - SW)))
 
             # Moln
             for c in clouds:
@@ -1931,13 +1942,13 @@ def main():
                 pygame.draw.circle(screen,(30,20,50),(SW-115,80),38)
             else:
                 # Vulkan: glödande röd sol med puls
-                rpulse=int(54+math.sin(atick*0.05)*6)
+                rpulse=int(54+math.sin(render_tick*0.05)*6)  # FIX #9
                 pygame.draw.circle(screen,(255,60,0),(SW-130,95),rpulse+10)
                 pygame.draw.circle(screen,pal["sun"],(SW-130,95),rpulse)
 
             # Stjärnor
             bright=0.4 if lvl==1 else (1.4 if lvl==2 else 1.8)
-            draw_stars(screen,stars,cam_x,atick,bright_base=bright)
+            draw_stars(screen,stars,cam_x,render_tick,bright_base=bright)  # FIX #9
 
             # Bakgrundsmoln / rök
             for c in clouds:
@@ -1950,7 +1961,7 @@ def main():
                     sx2=int(tx2-cam_x)
                     if -60<sx2<SW+60:
                         glow=pygame.Surface((140,140),pygame.SRCALPHA)
-                        a2=int(70+math.sin(atick*0.18+tx2)*20)
+                        a2=int(70+math.sin(render_tick*0.18+tx2)*20)  # FIX #9
                         pygame.draw.circle(glow,(255,140,30,a2),(70,70),70)
                         screen.blit(glow,(sx2-70,int(ty2)-70))
 
@@ -1987,12 +1998,12 @@ def main():
                     # Glödlinje ovanpå
                     pygame.draw.line(screen,(255,230,80),(sx2,lava_y),(sx2+lw,lava_y),3)
                     # Lava-bubblor
-                    if atick%20==int(lx)%20:
+                    if render_tick%20==int(lx)%20:  # FIX #9
                         spawn_parts(parts,lx+random.randint(0,lw),lava_y,2,cols=LAVA_PART)
 
             # Facklor (nivå 2)
             if lvl==2:
-                for tx2,ty2 in TORCHES: draw_torch(screen,tx2,ty2,cam_x,atick)
+                for tx2,ty2 in TORCHES: draw_torch(screen,tx2,ty2,cam_x,render_tick)  # FIX #9
 
             # Checkpoints – placeras ovanpå närmaste plattform
             for i, cx2 in enumerate(checks):
@@ -2002,15 +2013,15 @@ def main():
                     if p.left < cx2 < p.right:
                         best_plat_y = p.top
                         break
-                draw_checkpoint(screen, cx2, best_plat_y, cam_x, check_active[i], atick)
+                draw_checkpoint(screen, cx2, best_plat_y, cam_x, check_active[i], render_tick)  # FIX #9
 
             # Mynt
-            draw_coins(screen,coins,cam_x,atick)
+            draw_coins(screen,coins,cam_x,render_tick)  # FIX #9
 
             # Svart katt – nivåmål (ej på boss-nivå 3)
             if lvl in CAT_POS and not boss_fight:
                 cat_x, cat_plat_y = CAT_POS[lvl]
-                draw_cat(screen, cat_x, cat_plat_y - CAT_H//2, cam_x, atick)
+                draw_cat(screen, cat_x, cat_plat_y - CAT_H//2, cam_x, render_tick)  # FIX #9
 
             # Meteorer (nivå 3)
             if lvl==3:
@@ -2083,7 +2094,7 @@ def main():
 
             # Räven – rita med korrekt sprite och nuvarande animation
             draw_fox(screen, prect, cam_x,
-                     current_anim, anim_frame, fright, atick,
+                     current_anim, anim_frame, fright, render_tick,  # FIX #9
                      invincible > 0)
 
             # HUD
