@@ -250,16 +250,18 @@ ROCK_COL=(80,60,50)
 # ====================== LUNA SPRITE ANIMATION ======================
 
 ANIMATIONS    = {}
-ENEMY_SPRITES = {}   # fylls av load_enemy_sprites()
+ENEMY_SPRITES = {}        # typ → enstaka sprite (fallback)
+ENEMY_ANIM    = {}        # typ → {"frames": [...], "states": {state: [frames]}}
+
 def load_enemy_sprites():
     """Ladda fiende-sprites – matchar dina exakta filnamn."""
-    global ENEMY_SPRITES
+    global ENEMY_SPRITES, ENEMY_ANIM
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
     # typ-nyckel → (filnamn, bredd, höjd)
     # Sökordning: bilder/ direkt, sedan bilder/fiender/
     mappings = {
-        "vildsvin":    ("vildsvin.png",      90,  70),   # ditt filnamn saknar l
+        "vildsvin":    ("vildsvin.png",      90,  70),
         "orm":         ("orm.png",           80,  65),
         "vaxtmonster": ("vaxtmonster.png",  100, 110),
         "spindel":     ("spindel.png",       75,  70),
@@ -267,28 +269,57 @@ def load_enemy_sprites():
         "skelett":     ("skelett.png",       70,  90),
     }
 
+    # Animerade states per fiende-typ: state → [filnamn, ...]
+    anim_mappings = {
+        "vildsvin": {
+            "idle":   [("vildsvin_idle.png",  90, 70)],
+            "walk":   [("vildsvin_charge1.png", 90, 70), ("vildsvin_charge2.png", 90, 70)],
+            "alert":  [("vildsvin_alert.png", 90, 70)],
+            "charge": [("vildsvin_charge1.png", 90, 70), ("vildsvin_charge2.png", 90, 70)],
+        },
+        "orm": {
+            "idle":   [("orm_idle.png",    80, 65)],
+            "attack": [("orm_attack1.png", 80, 65), ("orm_attack2.png", 80, 65)],
+        },
+    }
+
     search_dirs = [
         os.path.join(script_dir, "bilder"),
         os.path.join(script_dir, "bilder", "fiender"),
     ]
 
-    print("=== Laddar fiende-sprites ===")
-    for typ, (filename, tw, th) in mappings.items():
-        loaded = False
+    def try_load(filename, tw, th):
         for folder in search_dirs:
             path = os.path.join(folder, filename)
             if os.path.exists(path):
                 try:
                     img = pygame.image.load(path).convert_alpha()
-                    ENEMY_SPRITES[typ] = pygame.transform.scale(img, (tw, th))
-                    print(f"   ✅ {typ} → {path}")
-                    loaded = True
-                    break
+                    return pygame.transform.scale(img, (tw, th))
                 except Exception as ex:
-                    print(f"   ❌ {typ}: {ex}")
-                    break
-        if not loaded:
+                    print(f"   ❌ {filename}: {ex}")
+        return None
+
+    print("=== Laddar fiende-sprites ===")
+    for typ, (filename, tw, th) in mappings.items():
+        img = try_load(filename, tw, th)
+        if img:
+            ENEMY_SPRITES[typ] = img
+            print(f"   ✅ {typ} → {filename}")
+        else:
             print(f"   ⚠  {typ} ({filename}) saknas – ritar med kod")
+
+    # Ladda animations-states
+    for typ, states in anim_mappings.items():
+        ENEMY_ANIM[typ] = {}
+        for state, frame_list in states.items():
+            frames = []
+            for fname, tw, th in frame_list:
+                img = try_load(fname, tw, th)
+                if img:
+                    frames.append(img)
+            if frames:
+                ENEMY_ANIM[typ][state] = frames
+                print(f"   🎞  {typ}/{state} → {len(frames)} frames")
     print()
 
 
@@ -600,7 +631,36 @@ def draw_enemy(surf, e, cam_x, tick):
     hurt       = e.get("knockback", 0) > 0
     flip       = 1 if face_right else -1
 
-    # ── Sprite-rendering ──────────────────────────────────
+    # ── Animerade sprites (vildsvin, orm) ──────────────────────────
+    if typ in ENEMY_ANIM and ENEMY_ANIM[typ]:
+        anim_states = ENEMY_ANIM[typ]
+        # Välj state
+        if typ == "vildsvin":
+            in_aggro = e.get("in_aggro", False)
+            state = "charge" if in_aggro else "idle"
+            if state not in anim_states:
+                state = next(iter(anim_states))
+        elif typ == "orm":
+            in_aggro = e.get("in_aggro", False)
+            state = "attack" if in_aggro else "idle"
+            if state not in anim_states:
+                state = next(iter(anim_states))
+        else:
+            state = next(iter(anim_states))
+
+        frames = anim_states[state]
+        fps_div = 8 if state in ("charge", "attack") else 16
+        frame_idx = (tick // fps_div) % len(frames)
+        img = frames[frame_idx]
+        iw, ih = img.get_size()
+        draw_img = pygame.transform.flip(img, True, False) if not face_right else img
+        if hurt:
+            draw_img = draw_img.copy()
+            draw_img.fill((255, 80, 80, 160), special_flags=pygame.BLEND_RGBA_MULT)
+        surf.blit(draw_img, (sx - iw//2, sy - ih))
+        return
+
+    # ── Enstaka sprite (övriga typer med sprite-bild) ──────────────
     if typ in ENEMY_SPRITES:
         img = ENEMY_SPRITES[typ]
         iw, ih = img.get_size()
@@ -1060,9 +1120,34 @@ def update_parts(surf,parts,cam_x):
         p["vy"]+=0.20; p["vx"]*=0.96; p["life"]-=p["decay"]
         if p["life"]<=0: parts.remove(p); continue
         r=max(1,p["r"])
-        ps=pygame.Surface((r*2,r*2),pygame.SRCALPHA)
-        pygame.draw.circle(ps,p["col"]+(int(p["life"]*230),),(r,r),r)
-        surf.blit(ps,(int(p["x"]-cam_x)-r,int(p["y"])-r))
+
+        if p.get("is_slime"):
+            # Roterande slem-oval med wobble
+            p["angle"] = p.get("angle", 0.0) + 0.18
+            alpha = int(p["life"] * 230)
+            # Beräkna oval storlek baserat på hastighet (sträcks i rörelseriktningen)
+            speed = math.hypot(p["vx"], p["vy"])
+            stretch = min(1.8, 1.0 + speed * 0.06)
+            rw = int(r * stretch)
+            rh = int(r / max(0.5, stretch * 0.7))
+            ps = pygame.Surface((rw*2+4, rh*2+4), pygame.SRCALPHA)
+            # Mörkare kant
+            dark = (30, 120, 10, alpha)
+            pygame.draw.ellipse(ps, dark, (0, 0, rw*2+4, rh*2+4))
+            # Ljusare mitt
+            bright = (90, 210, 50, alpha)
+            pygame.draw.ellipse(ps, bright, (2, 2, rw*2, rh*2))
+            # Liten glansreflex
+            glow = (170, 255, 120, min(200, alpha))
+            pygame.draw.ellipse(ps, glow, (rw//2, rh//2, rw, rh//2))
+            # Rotera ytan
+            rot = pygame.transform.rotate(ps, math.degrees(p["angle"]))
+            rx2, ry2 = rot.get_size()
+            surf.blit(rot, (int(p["x"]-cam_x) - rx2//2, int(p["y"]) - ry2//2))
+        else:
+            ps=pygame.Surface((r*2,r*2),pygame.SRCALPHA)
+            pygame.draw.circle(ps,p["col"]+(int(p["life"]*230),),(r,r),r)
+            surf.blit(ps,(int(p["x"]-cam_x)-r,int(p["y"])-r))
 
 # ═══════════════════════════════════════════
 #  MYNT
@@ -1174,6 +1259,7 @@ def main():
     boss=None; boss_fight=False
     cat_touched=False
     cam_x=0.0
+    slime_puddles=[]
     prect=pygame.Rect(150,380,44,52)
 
 
@@ -1227,8 +1313,7 @@ def main():
         nonlocal atick,jsq,jst,score,gtime,lives,lvl
         nonlocal djump_avail,jheld,jht,dash_cd,dash_dur,dashing
         nonlocal invincible,coyote,jbuf,clouds,stars,checkpoint_pos,lava_wave
-        nonlocal sub_x,sub_y
-
+        nonlocal sub_x,sub_y,slime_puddles
         lvl=level
         if lvl==1:   pd,ed,chk = PLATS_1,ENEMIES_1,CHECKS_1
         elif lvl==2: pd,ed,chk = PLATS_2,ENEMIES_2,CHECKS_2
@@ -1249,6 +1334,7 @@ def main():
         parts=[]; enemies=[]; meteors=[]; meteor_timer=0
         boss=None; boss_fight=False; lava_wave=0.0
         checks=chk; check_active=[False]*len(chk)
+        slime_puddles=[]
         clouds=make_clouds(); stars=make_stars()
 
         if from_checkpoint and checkpoint_pos:
@@ -1632,18 +1718,30 @@ def main():
 
                 # Beteende per typ
                 if typ == "vaxtmonster":
-                    # Stationär – skjuter taggar
+                    # Vänd sig mot spelaren
+                    e["dir"] = 1.0 if prect.centerx > e["x"] else -1.0
+
+                    # Skjuter bara om Luna är inom räckvidd
+                    SHOOT_RANGE = 350
+                    player_visible = abs(prect.centerx - e["x"]) < SHOOT_RANGE
+
                     e["shoot_timer"] -= 1
-                    if e["shoot_timer"] <= 0:
+                    if e["shoot_timer"] <= 0 and player_visible:
                         e["shoot_timer"] = random.randint(90,150)
-                        # Skjut en "tagg" (vi skapar en partikel mot spelaren)
+                        # Skjut en slem-klump mot spelaren
                         dx = prect.centerx - e["x"]
                         dy = prect.centery - e["y"]
                         dist = max(1, math.hypot(dx,dy))
-                        parts.append({"x":e["x"],"y":e["y"]-60,
-                            "vx":dx/dist*6,"vy":dy/dist*6,
-                            "life":1.0,"decay":0.018,"r":7,
-                            "col":(80,200,40),"is_thorn":True})
+                        parts.append({
+                            "x": e["x"], "y": e["y"] - 60,
+                            "vx": dx/dist * 5.5, "vy": dy/dist * 5.5,
+                            "life": 1.0, "decay": 0.014, "r": 10,
+                            "col": (60, 180, 30), "is_thorn": True,
+                            "is_slime": True, "angle": 0.0,
+                        })
+                    elif e["shoot_timer"] <= 0:
+                        # Återställ timern även om inte i räckvidd
+                        e["shoot_timer"] = random.randint(60, 90)
 
                 elif typ == "uggla":
                     # Flyger + dyker mot spelaren med jämna mellanrum
@@ -1656,7 +1754,11 @@ def main():
                     if e["dive_timer"] > 180 and not e.get("diving"):
                         if abs(e["x"] - prect.centerx) < 200:
                             e["diving"] = True; e["dive_timer"] = 0
+                            e["dive_target_x"] = float(prect.centerx)  # spara mål-X vid dyk-start
                     if e.get("diving"):
+                        # Tracka spelarens X under dyket – rör sig horisontellt mot spelaren
+                        tx_diff = prect.centerx - e["x"]
+                        e["x"] += max(-3.5, min(3.5, tx_diff * 0.12))
                         e["y"] += 5
                         # FIX #4: använd ugglans egna position, inte spelarens on_gnd
                         if e["y"] > e.get("base_y", e["y"]) + 120:
@@ -1678,15 +1780,36 @@ def main():
                         e["dir"] *= -1
 
                 else:
-                    # Standard patrol (vildsvin, orm, skelett)
-                    e["x"] += e["spd"] * e["dir"]
-                    if e["patrol_w"]>0 and (e["x"]>e["patrol_x"]+e["patrol_w"] or e["x"]<e["patrol_x"]):
-                        e["dir"] *= -1
+                    # Standard patrol (vildsvin, orm, skelett) med aggro-beteende
+                    # Fienden stannar på sin plattform – clampas inom patrol-gränserna
+                    AGGRO_RANGE = 240   # pixlar – aggreras inom detta avstånd
+                    dx_to_player = prect.centerx - e["x"]
+                    in_aggro = abs(dx_to_player) < AGGRO_RANGE
+                    e["in_aggro"] = in_aggro   # skickas till draw_enemy för animation
+
+                    if in_aggro and e["patrol_w"] > 0:
+                        # Jaga spelaren men lämna aldrig plattformen
+                        chase_dir = 1.0 if dx_to_player > 0 else -1.0
+                        e["dir"] = chase_dir
+                        new_x = e["x"] + e["spd"] * 1.5 * chase_dir
+                        # Håll inom patrull-zonen
+                        new_x = max(e["patrol_x"], min(e["patrol_x"] + e["patrol_w"], new_x))
+                        e["x"] = new_x
+                    elif in_aggro and e["patrol_w"] == 0:
+                        # Stationär fiende (patrol_w=0) – håll stilla, vänd sig bara mot spelaren
+                        e["dir"] = 1.0 if dx_to_player > 0 else -1.0
+                    else:
+                        # Normal patrull
+                        e["x"] += e["spd"] * e["dir"]
+                        if e["patrol_w"]>0 and (e["x"]>e["patrol_x"]+e["patrol_w"] or e["x"]<e["patrol_x"]):
+                            e["dir"] *= -1
 
                 er = pygame.Rect(int(e["x"]-e["w"]//2), int(e["y"]), e["w"], e["h"])
                 if prect.colliderect(er) and invincible == 0:
-                    if prect.bottom < er.centery and vy > 0:
-                        enemies.remove(e); vy = -12; score += 30
+                    # Stomp: Luna faller ner och träffar fiendens övre tredjedel
+                    stomp_zone = er.top + er.h // 3
+                    if prect.bottom <= stomp_zone + 14 and vy > 0:
+                        enemies.remove(e); vy = -14; score += 30
                         ec = LAVA_PART if lvl==3 else ([(140,60,180),(180,80,220)] if lvl==2 else [(80,130,60),(120,180,80)])
                         spawn_parts(parts, e["x"], e["y"], 12, cols=ec)
                         play_sfx(SND_COIN)
@@ -1697,17 +1820,75 @@ def main():
                             play_sfx(SND_DEATH); stop_music()
                             add_score(save_data,pname[0],score,gtime); state=S_DEAD
 
-            # Tagg-projektiler skadar Luna
-            # FIX #3: kollar kollision separat – update_parts hanterar decay/livslängd
+            # Projektil-kollision (slem + tagg)
             for p in parts[:]:
-                if p.get("is_thorn") and p in parts and invincible == 0:
-                    pr = pygame.Rect(int(p["x"]-p["r"]), int(p["y"]-p["r"]), p["r"]*2, p["r"]*2)
-                    if pr.colliderect(prect):
-                        lives -= 1; invincible = 90; play_sfx(SND_HIT)
+                if not p.get("is_thorn"): continue
+                if p not in parts: continue
+                pr = pygame.Rect(int(p["x"]-p["r"]), int(p["y"]-p["r"]), p["r"]*2, p["r"]*2)
+
+                # Träffar Luna?
+                if pr.colliderect(prect) and invincible == 0:
+                    lives -= 1; invincible = 90; play_sfx(SND_HIT)
+                    if p.get("is_slime"):
+                        # Slem-splash
+                        for _ in range(10):
+                            angle = random.uniform(0, math.pi*2)
+                            spd2  = random.uniform(1.5, 4.5)
+                            parts.append({
+                                "x": p["x"], "y": p["y"],
+                                "vx": math.cos(angle)*spd2,
+                                "vy": math.sin(angle)*spd2 - 2.0,
+                                "life": random.uniform(0.5, 0.9),
+                                "decay": 0.04, "r": random.randint(3, 6),
+                                "col": random.choice([(60,180,30),(90,210,50),(40,140,20)]),
+                                "is_thorn": False,
+                            })
+                    if p in parts: parts.remove(p)
+                    if lives <= 0:
+                        play_sfx(SND_DEATH); stop_music()
+                        add_score(save_data, pname[0], score, gtime); state = S_DEAD
+                    continue
+
+                # Slem-klump träffar plattform → bli pöl
+                if p.get("is_slime"):
+                    hit_floor = any(pr.colliderect(plt) for plt in all_collidable)
+                    if hit_floor or p["y"] > SH - 40:
+                        # Hitta plattformens topp-y
+                        puddle_y = p["y"]
+                        for plt in all_collidable:
+                            if pr.colliderect(plt):
+                                puddle_y = float(plt.top)
+                                break
+                        slime_puddles.append({
+                            "x": p["x"], "y": puddle_y,
+                            "w": 40, "life": 480,   # 8 sekunder vid 60fps
+                        })
+                        # Stänk vid landning
+                        for _ in range(6):
+                            a2 = random.uniform(-math.pi, 0)
+                            parts.append({
+                                "x": p["x"], "y": puddle_y,
+                                "vx": math.cos(a2)*random.uniform(1,3),
+                                "vy": math.sin(a2)*random.uniform(1,3),
+                                "life": 0.6, "decay": 0.05, "r": 4,
+                                "col": (60,180,30), "is_thorn": False,
+                            })
                         if p in parts: parts.remove(p)
-                        if lives <= 0:
-                            play_sfx(SND_DEATH); stop_music()
-                            add_score(save_data, pname[0], score, gtime); state = S_DEAD
+
+            # Slem-pölar – uppdatera och kolla kollision
+            for sp in slime_puddles[:]:
+                sp["life"] -= 1
+                if sp["life"] <= 0:
+                    slime_puddles.remove(sp)
+                    continue
+                spr = pygame.Rect(int(sp["x"] - sp["w"]//2), int(sp["y"] - 8), sp["w"], 10)
+                if spr.colliderect(prect) and invincible == 0:
+                    lives -= 1; invincible = 90; play_sfx(SND_HIT)
+                    spawn_parts(parts, prect.centerx, prect.bottom, 6,
+                                cols=[(60,180,30),(90,210,50)])
+                    if lives <= 0:
+                        play_sfx(SND_DEATH); stop_music()
+                        add_score(save_data, pname[0], score, gtime); state = S_DEAD
 
             # Mynt
             for c in coins:
@@ -2042,6 +2223,17 @@ def main():
 
             # Fiender
             for e in enemies: draw_enemy(screen,e,cam_x,e["tick"])
+
+            # Slem-pölar (ritas efter fiender, under partiklar)
+            for sp in slime_puddles:
+                sx2 = int(sp["x"] - cam_x)
+                if -80 < sx2 < SW + 80:
+                    alpha = min(220, int(sp["life"] / 480 * 200) + 80)
+                    pw2 = sp["w"]
+                    ps2 = pygame.Surface((pw2, 12), pygame.SRCALPHA)
+                    pygame.draw.ellipse(ps2, (40, 140, 20, alpha), (0, 0, pw2, 12))
+                    pygame.draw.ellipse(ps2, (90, 210, 50, alpha//2), (pw2//4, 2, pw2//2, 6))
+                    screen.blit(ps2, (sx2 - pw2//2, int(sp["y"]) - 10))
 
             # Boss (nivå 3)
             if lvl==3 and boss is not None and boss["hp"]>0:
