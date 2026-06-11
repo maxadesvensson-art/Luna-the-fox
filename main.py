@@ -317,7 +317,7 @@ def load_enemy_sprites():
                 img = try_load(fname, tw, th)
                 if img:
                     frames.append(img)
-            if frames:
+            if frames:  # ENDAST lägg till om vi har minst en frame
                 ENEMY_ANIM[typ][state] = frames
                 print(f"   🎞  {typ}/{state} → {len(frames)} frames")
     print()
@@ -634,31 +634,37 @@ def draw_enemy(surf, e, cam_x, tick):
     # ── Animerade sprites (vildsvin, orm) ──────────────────────────
     if typ in ENEMY_ANIM and ENEMY_ANIM[typ]:
         anim_states = ENEMY_ANIM[typ]
-        # Välj state
-        if typ == "vildsvin":
-            in_aggro = e.get("in_aggro", False)
-            state = "charge" if in_aggro else "idle"
-            if state not in anim_states:
-                state = next(iter(anim_states))
-        elif typ == "orm":
-            in_aggro = e.get("in_aggro", False)
-            state = "attack" if in_aggro else "idle"
-            if state not in anim_states:
-                state = next(iter(anim_states))
-        else:
-            state = next(iter(anim_states))
-
-        frames = anim_states[state]
-        fps_div = 8 if state in ("charge", "attack") else 16
-        frame_idx = (tick // fps_div) % len(frames)
-        img = frames[frame_idx]
-        iw, ih = img.get_size()
-        draw_img = pygame.transform.flip(img, True, False) if not face_right else img
-        if hurt:
-            draw_img = draw_img.copy()
-            draw_img.fill((255, 80, 80, 160), special_flags=pygame.BLEND_RGBA_MULT)
-        surf.blit(draw_img, (sx - iw//2, sy - ih))
-        return
+        # Hitta minst en state med frames
+        available_states = [(s, f) for s, f in anim_states.items() if f]
+        if available_states:
+            # Välj state
+            if typ == "vildsvin":
+                in_aggro = e.get("in_aggro", False)
+                state = "charge" if in_aggro else "idle"
+            elif typ == "orm":
+                in_aggro = e.get("in_aggro", False)
+                state = "attack" if in_aggro else "idle"
+            else:
+                state, frames = available_states[0]
+            
+            # Kolla om state finns med frames
+            frames = anim_states.get(state, [])
+            if not frames:
+                # Fallback till första tillgängliga
+                state, frames = available_states[0]
+            
+            fps_div = 8 if state in ("charge", "attack") else 16
+            frame_idx = (tick // fps_div) % len(frames)
+            img = frames[frame_idx]
+            iw, ih = img.get_size()
+            draw_img = pygame.transform.flip(img, True, False) if not face_right else img
+            if hurt:
+                draw_img = draw_img.copy()
+                draw_img.fill((255, 80, 80, 160), special_flags=pygame.BLEND_RGBA_MULT)
+            # RITA: spriten ska ha fötterna på e["y"] (plattformens topp)
+            draw_y = sy - ih
+            surf.blit(draw_img, (sx - iw//2, draw_y))
+            return
 
     # ── Enstaka sprite (övriga typer med sprite-bild) ──────────────
     if typ in ENEMY_SPRITES:
@@ -1804,11 +1810,26 @@ def main():
                         if e["patrol_w"]>0 and (e["x"]>e["patrol_x"]+e["patrol_w"] or e["x"]<e["patrol_x"]):
                             e["dir"] *= -1
 
-                er = pygame.Rect(int(e["x"]-e["w"]//2), int(e["y"]), e["w"], e["h"])
+                # Kollisionsbox: Använd e["y"] - ih som top eftersom draw_enemy ritar med y = e["y"] - ih
+                # e["h"] är 54 som standard, men ih kan variera för animerade sprites
+                # Använd ih från draw_enemy för korrekt y-position
+                ih_enemy = 54  # fallback
+                if typ in ENEMY_ANIM and ENEMY_ANIM[typ]:
+                    anim_states = ENEMY_ANIM[typ]
+                    if typ == "vildsvin":
+                        state = "charge" if e.get("in_aggro", False) else "idle"
+                    elif typ == "orm":
+                        state = "attack" if e.get("in_aggro", False) else "idle"
+                    else:
+                        state = next(iter(anim_states))
+                    frames = anim_states.get(state, [])
+                    if frames:
+                        ih_enemy = frames[0].get_height()
+                er = pygame.Rect(int(e["x"]-e["w"]//2), int(e["y"] - ih_enemy), e["w"], ih_enemy)
                 if prect.colliderect(er) and invincible == 0:
-                    # Stomp: Luna faller ner och träffar fiendens övre tredjedel
-                    stomp_zone = er.top + er.h // 3
-                    if prect.bottom <= stomp_zone + 14 and vy > 0:
+                    # Stomp: Luna faller ner och träffar fiendens övre halva
+                    stomp_zone = er.top + er.h // 2
+                    if prect.bottom <= stomp_zone + 5 and vy > 0:
                         enemies.remove(e); vy = -14; score += 30
                         ec = LAVA_PART if lvl==3 else ([(140,60,180),(180,80,220)] if lvl==2 else [(80,130,60),(120,180,80)])
                         spawn_parts(parts, e["x"], e["y"], 12, cols=ec)
