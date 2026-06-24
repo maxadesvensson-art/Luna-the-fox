@@ -250,18 +250,16 @@ ROCK_COL=(80,60,50)
 # ====================== LUNA SPRITE ANIMATION ======================
 
 ANIMATIONS    = {}
-ENEMY_SPRITES = {}        # typ → enstaka sprite (fallback)
-ENEMY_ANIM    = {}        # typ → {"frames": [...], "states": {state: [frames]}}
-
+ENEMY_SPRITES = {}   # fylls av load_enemy_sprites()
 def load_enemy_sprites():
     """Ladda fiende-sprites – matchar dina exakta filnamn."""
-    global ENEMY_SPRITES, ENEMY_ANIM
+    global ENEMY_SPRITES
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
     # typ-nyckel → (filnamn, bredd, höjd)
     # Sökordning: bilder/ direkt, sedan bilder/fiender/
     mappings = {
-        "vildsvin":    ("vildsvin.png",      90,  70),
+        "vildsvin":    ("vildsvin.png",      90,  70),   # ditt filnamn saknar l
         "orm":         ("orm.png",           80,  65),
         "vaxtmonster": ("vaxtmonster.png",  100, 110),
         "spindel":     ("spindel.png",       75,  70),
@@ -269,58 +267,37 @@ def load_enemy_sprites():
         "skelett":     ("skelett.png",       70,  90),
     }
 
-    # Animerade states per fiende-typ: state → [filnamn, ...]
-    anim_mappings = {
-        "vildsvin": {
-            "idle":   [("vildsvin_idle.png",  90, 70)],
-            "walk":   [("vildsvin_charge1.png", 90, 70), ("vildsvin_charge2.png", 90, 70)],
-            "alert":  [("vildsvin_alert.png", 90, 70)],
-            "charge": [("vildsvin_charge1.png", 90, 70), ("vildsvin_charge2.png", 90, 70)],
-        },
-        "orm": {
-            "idle":   [("orm_idle.png",    80, 65)],
-            "attack": [("orm_attack1.png", 80, 65), ("orm_attack2.png", 80, 65)],
-        },
-    }
-
     search_dirs = [
         os.path.join(script_dir, "bilder"),
         os.path.join(script_dir, "bilder", "fiender"),
     ]
 
-    def try_load(filename, tw, th):
+    print("=== Laddar fiende-sprites ===")
+    for typ, (filename, tw, th) in mappings.items():
+        loaded = False
         for folder in search_dirs:
             path = os.path.join(folder, filename)
             if os.path.exists(path):
                 try:
                     img = pygame.image.load(path).convert_alpha()
-                    return pygame.transform.scale(img, (tw, th))
+                    ENEMY_SPRITES[typ] = pygame.transform.scale(img, (tw, th))
+                    print(f"   ✅ {typ} → {path}")
+                    loaded = True
+                    break
                 except Exception as ex:
-                    print(f"   ❌ {filename}: {ex}")
-        return None
-
-    print("=== Laddar fiende-sprites ===")
-    for typ, (filename, tw, th) in mappings.items():
-        img = try_load(filename, tw, th)
-        if img:
-            ENEMY_SPRITES[typ] = img
-            print(f"   ✅ {typ} → {filename}")
-        else:
+                    print(f"   ❌ {typ}: {ex}")
+                    break
+        if not loaded:
             print(f"   ⚠  {typ} ({filename}) saknas – ritar med kod")
-
-    # Ladda animations-states
-    for typ, states in anim_mappings.items():
-        ENEMY_ANIM[typ] = {}
-        for state, frame_list in states.items():
-            frames = []
-            for fname, tw, th in frame_list:
-                img = try_load(fname, tw, th)
-                if img:
-                    frames.append(img)
-            if frames:  # ENDAST lägg till om vi har minst en frame
-                ENEMY_ANIM[typ][state] = frames
-                print(f"   🎞  {typ}/{state} → {len(frames)} frames")
     print()
+
+
+current_anim = "idle"
+anim_frame = 0
+anim_timer = 0
+facing_right = True
+
+
 
 
 def load_animation(folder, target_width=78, target_height=105):
@@ -631,42 +608,7 @@ def draw_enemy(surf, e, cam_x, tick):
     hurt       = e.get("knockback", 0) > 0
     flip       = 1 if face_right else -1
 
-    # ── Animerade sprites (vildsvin, orm) ──────────────────────────
-    if typ in ENEMY_ANIM and ENEMY_ANIM[typ]:
-        anim_states = ENEMY_ANIM[typ]
-        # Hitta minst en state med frames
-        available_states = [(s, f) for s, f in anim_states.items() if f]
-        if available_states:
-            # Välj state
-            if typ == "vildsvin":
-                in_aggro = e.get("in_aggro", False)
-                state = "charge" if in_aggro else "idle"
-            elif typ == "orm":
-                in_aggro = e.get("in_aggro", False)
-                state = "attack" if in_aggro else "idle"
-            else:
-                state, frames = available_states[0]
-            
-            # Kolla om state finns med frames
-            frames = anim_states.get(state, [])
-            if not frames:
-                # Fallback till första tillgängliga
-                state, frames = available_states[0]
-            
-            fps_div = 8 if state in ("charge", "attack") else 16
-            frame_idx = (tick // fps_div) % len(frames)
-            img = frames[frame_idx]
-            iw, ih = img.get_size()
-            draw_img = pygame.transform.flip(img, True, False) if not face_right else img
-            if hurt:
-                draw_img = draw_img.copy()
-                draw_img.fill((255, 80, 80, 160), special_flags=pygame.BLEND_RGBA_MULT)
-            # RITA: spriten ska ha fötterna på e["y"] (plattformens topp)
-            draw_y = sy - ih
-            surf.blit(draw_img, (sx - iw//2, draw_y))
-            return
-
-    # ── Enstaka sprite (övriga typer med sprite-bild) ──────────────
+    # ── Sprite-rendering ──────────────────────────────────
     if typ in ENEMY_SPRITES:
         img = ENEMY_SPRITES[typ]
         iw, ih = img.get_size()
@@ -1126,42 +1068,16 @@ def update_parts(surf,parts,cam_x):
         p["vy"]+=0.20; p["vx"]*=0.96; p["life"]-=p["decay"]
         if p["life"]<=0: parts.remove(p); continue
         r=max(1,p["r"])
-
-        if p.get("is_slime"):
-            # Roterande slem-oval med wobble
-            p["angle"] = p.get("angle", 0.0) + 0.18
-            alpha = int(p["life"] * 230)
-            # Beräkna oval storlek baserat på hastighet (sträcks i rörelseriktningen)
-            speed = math.hypot(p["vx"], p["vy"])
-            stretch = min(1.8, 1.0 + speed * 0.06)
-            rw = int(r * stretch)
-            rh = int(r / max(0.5, stretch * 0.7))
-            ps = pygame.Surface((rw*2+4, rh*2+4), pygame.SRCALPHA)
-            # Mörkare kant
-            dark = (30, 120, 10, alpha)
-            pygame.draw.ellipse(ps, dark, (0, 0, rw*2+4, rh*2+4))
-            # Ljusare mitt
-            bright = (90, 210, 50, alpha)
-            pygame.draw.ellipse(ps, bright, (2, 2, rw*2, rh*2))
-            # Liten glansreflex
-            glow = (170, 255, 120, min(200, alpha))
-            pygame.draw.ellipse(ps, glow, (rw//2, rh//2, rw, rh//2))
-            # Rotera ytan
-            rot = pygame.transform.rotate(ps, math.degrees(p["angle"]))
-            rx2, ry2 = rot.get_size()
-            surf.blit(rot, (int(p["x"]-cam_x) - rx2//2, int(p["y"]) - ry2//2))
-        else:
-            ps=pygame.Surface((r*2,r*2),pygame.SRCALPHA)
-            pygame.draw.circle(ps,p["col"]+(int(p["life"]*230),),(r,r),r)
-            surf.blit(ps,(int(p["x"]-cam_x)-r,int(p["y"])-r))
+        ps=pygame.Surface((r*2,r*2),pygame.SRCALPHA)
+        pygame.draw.circle(ps,p["col"]+(int(p["life"]*230),),(r,r),r)
+        surf.blit(ps,(int(p["x"]-cam_x)-r,int(p["y"])-r))
 
 # ═══════════════════════════════════════════
 #  MYNT
 # ═══════════════════════════════════════════
 def make_coins(plat_data):
     coins=[]
-    # FIX #8: enumerate-index i användes aldrig – borttaget
-    for (px,py,pw,_) in plat_data[1:-1]:
+    for i,(px,py,pw,_) in enumerate(plat_data[1:-1],1):
         coins.append({"x":px+pw//2,"y":py-30,"r":10,"collected":False})
     return coins
 
@@ -1265,26 +1181,54 @@ def main():
     boss=None; boss_fight=False
     cat_touched=False
     cam_x=0.0
-    slime_puddles=[]
     prect=pygame.Rect(150,380,44,52)
 
 
-    # # Animation
-    # current_anim = "idle"
-    # anim_frame = 0
-    # anim_timer = 0
-    # facing_right = True
+    # Animation
+    current_anim = "idle"
+    anim_frame = 0
+    anim_timer = 0
+    facing_right = True
 
     # Ändra storlek på spelaren till den nya större räven
     prect = pygame.Rect(150, 380, 78, 105)   # ← uppdaterad storlek
 
-    # Animationsvariabler – lokala i main() så update_animation kan använda nonlocal
-    current_anim = "idle"
-    anim_frame   = 0
-    anim_timer   = 0.0
-    facing_right = True
 
 
+    # ====================== ANIMATION FUNKTION ======================
+    def update_animation():
+        nonlocal current_anim, anim_frame, anim_timer, facing_right
+
+        anim_timer += 1 / FPS
+
+        if dashing:
+            new_anim = "dash"
+        elif invincible > 0:
+            new_anim = "hit"
+        elif not on_gnd:
+            new_anim = "double_jump" if not djump_avail else "jump"
+        elif current_anim == "idle" and abs(vx) > 1.8:
+            new_anim = "run"
+        elif current_anim == "run" and abs(vx) < 0.4:
+            new_anim = "idle"
+        elif current_anim not in ("idle","run"):
+            new_anim = "run" if abs(vx) > 1.8 else "idle"
+        else:
+            new_anim = current_anim
+
+        if new_anim != current_anim:
+            current_anim = new_anim
+            anim_frame = 0
+            anim_timer = 0
+
+        if current_anim in ANIMATIONS and ANIMATIONS[current_anim]:
+            speed = 0.07 if current_anim == "run" else 0.16
+            if anim_timer >= speed:
+                anim_timer = 0
+                anim_frame = (anim_frame + 1) % len(ANIMATIONS[current_anim])
+
+        facing_right = fright
+    # ================================================================
 
 
 
@@ -1306,11 +1250,6 @@ def main():
     trans_alpha=0; trans_dir=0; trans_target=None
     checkpoint_pos=None
     lava_wave=0.0
-    # FIX #9: render_tick aldrig nollställs – undviker torch-flicker vid reset
-    render_tick = 0
-    # FIX #2: subpixel-ackumulatorer för mjuk rörelse
-    sub_x = 0.0
-    sub_y = 0.0
 
     def reset(level=1, from_checkpoint=False):
         nonlocal plats,moving_plats,coins,parts,enemies,checks,check_active
@@ -1319,7 +1258,7 @@ def main():
         nonlocal atick,jsq,jst,score,gtime,lives,lvl
         nonlocal djump_avail,jheld,jht,dash_cd,dash_dur,dashing
         nonlocal invincible,coyote,jbuf,clouds,stars,checkpoint_pos,lava_wave
-        nonlocal sub_x,sub_y,slime_puddles
+
         lvl=level
         if lvl==1:   pd,ed,chk = PLATS_1,ENEMIES_1,CHECKS_1
         elif lvl==2: pd,ed,chk = PLATS_2,ENEMIES_2,CHECKS_2
@@ -1340,7 +1279,6 @@ def main():
         parts=[]; enemies=[]; meteors=[]; meteor_timer=0
         boss=None; boss_fight=False; lava_wave=0.0
         checks=chk; check_active=[False]*len(chk)
-        slime_puddles=[]
         clouds=make_clouds(); stars=make_stars()
 
         if from_checkpoint and checkpoint_pos:
@@ -1352,7 +1290,6 @@ def main():
         prect=pygame.Rect(sx,sy,78,105)
         vx=vy=0.0; on_gnd=False; fright=True
         atick=0; jsq=1.0; jst=1.0
-        sub_x=0.0; sub_y=0.0   # FIX #2: nollställ subpixel-ackumulatorer vid reset
         if not from_checkpoint: score=0; gtime=0; lives=3
         djump_avail=True; jheld=False; jht=0
         dash_cd=0; dash_dur=0; dashing=False; invincible=0
@@ -1364,9 +1301,7 @@ def main():
             spd = random.uniform(smin, smax)
             # Uggla/spindel flyger – placera högre
             fly_types = ("uggla", "spindel")
-            # ey är plattformens topp-y. Markfiender ska stå på toppen → ey_off=0
-            # Flygfiender placeras högre upp
-            ey_off = 80 if typ in fly_types else 0
+            ey_off = 80 if typ in fly_types else 54
             enemies.append({
                 "x": float(ex), "y": float(ey) - ey_off,
                 "w": 36, "h": 54,
@@ -1396,7 +1331,7 @@ def main():
 
     # ── Animation-uppdatering (inuti main för att nå lokala variabler) ──
     def update_animation():
-        nonlocal current_anim, anim_frame, anim_timer, facing_right
+        nonlocal current_anim, anim_frame, anim_timer
 
         anim_timer += 1.0 / FPS
 
@@ -1406,12 +1341,15 @@ def main():
         elif invincible > 0:
             new_anim = "hit"
         elif not on_gnd:
-            # I luften – välj jump eller double_jump
             new_anim = "double_jump" if not djump_avail else "jump"
-        elif abs(vx) > 1.0:
+        elif current_anim == "idle" and abs(vx) > 1.8:
             new_anim = "run"
-        else:
+        elif current_anim == "run" and abs(vx) < 0.4:
             new_anim = "idle"
+        elif current_anim not in ("idle","run"):
+            new_anim = "run" if abs(vx) > 1.8 else "idle"
+        else:
+            new_anim = current_anim
 
         # Återställ frame vid animationsbyte
         if new_anim != current_anim:
@@ -1435,16 +1373,13 @@ def main():
                 anim_timer = 0.0
                 anim_frame = (anim_frame + 1) % len(ANIMATIONS[current_anim])
 
-        # Uppdatera riktning
-        facing_right = fright
-
     # Fade-overlay
     fade_surf=pygame.Surface((SW,SH)); fade_surf.fill((0,0,0))
 
     running=True
     while running:
         clock.tick(FPS)
-        mtick+=1; blink+=1; atick+=1; render_tick+=1   # FIX #9: render_tick räknar alltid upp
+        mtick+=1; blink+=1; atick+=1
         mx,my=pygame.mouse.get_pos()
 
         for ev in pygame.event.get():
@@ -1493,8 +1428,6 @@ def main():
                     if ev.key==pygame.K_r:
                         if state==S_DEAD and checkpoint_pos:
                             reset(lvl,from_checkpoint=True)
-                        elif state==S_WIN:
-                            reset(1)   # FIX #5: S_WIN startar alltid om från nivå 1 med nollad score
                         else:
                             reset(lvl)
                         state=S_PLAY
@@ -1554,12 +1487,7 @@ def main():
             if not any(keys2[k] for k in (pygame.K_SPACE,pygame.K_w,pygame.K_UP)): jheld=False
 
             vy=min(vy+GRAV,24)
-
-            # FIX #2: subpixel-ackumulatorer – rör aldrig 0 px även vid låg fart
-            sub_x += vx
-            sub_y += vy
-            move_x = int(sub_x); sub_x -= move_x
-            move_y = int(sub_y); sub_y -= move_y
+            prect.x+=int(vx); prect.y+=int(vy)
 
             # ── Rörliga plattformar (nivå 3) ──
             all_collidable = list(plats)
@@ -1572,34 +1500,17 @@ def main():
                         mp["rect"].y=int(mp["oy"]+math.sin(t2)*mp["amp"])
                     all_collidable.append(mp["rect"])
 
-            # FIX #1: Kollision per axel separat – förhindrar fastna i väggar
-            # X-axel
-            prect.x += move_x
-            for p in all_collidable:
-                if prect.colliderect(p):
-                    if move_x > 0: prect.right = p.left; vx = 0; sub_x = 0.0
-                    elif move_x < 0: prect.left = p.right; vx = 0; sub_x = 0.0
-
-            # Y-axel
+            # Kollision
             was_on=on_gnd; on_gnd=False
-            prect.y += move_y
             for p in all_collidable:
                 if prect.colliderect(p):
-                    if move_y >= 0 and prect.bottom - move_y <= p.top + 16:
-                        prect.bottom=p.top; vy=0; sub_y=0.0; on_gnd=True
+                    if vy>0 and prect.bottom-vy<=p.top+16:
+                        prect.bottom=p.top; vy=0; on_gnd=True
                         coyote=6; djump_avail=True
                         if jst>1.05: jsq=0.68; play_sfx(SND_LAND)
-                    elif move_y < 0:
-                        prect.top=p.bottom; vy=0; sub_y=0.0
-
-            # Extra check: om spelaren precis nuddar plattform underifrån (move_y==0 men redan överlappande)
-            if not on_gnd:
-                feet = pygame.Rect(prect.x + 2, prect.bottom, prect.width - 4, 4)
-                for p in all_collidable:
-                    if feet.colliderect(p):
-                        prect.bottom = p.top; vy = 0; sub_y = 0.0; on_gnd = True
-                        coyote = 6; djump_avail = True
-                        break
+                    elif vy<0: prect.top=p.bottom; vy=0
+                    elif vx>0 and prect.right-abs(vx)<=p.left+8: prect.right=p.left; vx=0
+                    elif vx<0 and prect.left+abs(vx)>=p.right-8: prect.left=p.right; vx=0
 
             if was_on and not on_gnd: coyote=6
 
@@ -1724,30 +1635,18 @@ def main():
 
                 # Beteende per typ
                 if typ == "vaxtmonster":
-                    # Vänd sig mot spelaren
-                    e["dir"] = 1.0 if prect.centerx > e["x"] else -1.0
-
-                    # Skjuter bara om Luna är inom räckvidd
-                    SHOOT_RANGE = 350
-                    player_visible = abs(prect.centerx - e["x"]) < SHOOT_RANGE
-
+                    # Stationär – skjuter taggar
                     e["shoot_timer"] -= 1
-                    if e["shoot_timer"] <= 0 and player_visible:
+                    if e["shoot_timer"] <= 0:
                         e["shoot_timer"] = random.randint(90,150)
-                        # Skjut en slem-klump mot spelaren
+                        # Skjut en "tagg" (vi skapar en partikel mot spelaren)
                         dx = prect.centerx - e["x"]
                         dy = prect.centery - e["y"]
                         dist = max(1, math.hypot(dx,dy))
-                        parts.append({
-                            "x": e["x"], "y": e["y"] - 60,
-                            "vx": dx/dist * 5.5, "vy": dy/dist * 5.5,
-                            "life": 1.0, "decay": 0.014, "r": 10,
-                            "col": (60, 180, 30), "is_thorn": True,
-                            "is_slime": True, "angle": 0.0,
-                        })
-                    elif e["shoot_timer"] <= 0:
-                        # Återställ timern även om inte i räckvidd
-                        e["shoot_timer"] = random.randint(60, 90)
+                        parts.append({"x":e["x"],"y":e["y"]-60,
+                            "vx":dx/dist*6,"vy":dy/dist*6,
+                            "life":1.0,"decay":0.018,"r":7,
+                            "col":(80,200,40),"is_thorn":True})
 
                 elif typ == "uggla":
                     # Flyger + dyker mot spelaren med jämna mellanrum
@@ -1760,14 +1659,9 @@ def main():
                     if e["dive_timer"] > 180 and not e.get("diving"):
                         if abs(e["x"] - prect.centerx) < 200:
                             e["diving"] = True; e["dive_timer"] = 0
-                            e["dive_target_x"] = float(prect.centerx)  # spara mål-X vid dyk-start
                     if e.get("diving"):
-                        # Tracka spelarens X under dyket – rör sig horisontellt mot spelaren
-                        tx_diff = prect.centerx - e["x"]
-                        e["x"] += max(-3.5, min(3.5, tx_diff * 0.12))
                         e["y"] += 5
-                        # FIX #4: använd ugglans egna position, inte spelarens on_gnd
-                        if e["y"] > e.get("base_y", e["y"]) + 120:
+                        if e["y"] > e.get("base_y", e["y"]) + 120 or on_gnd:
                             e["diving"] = False
                             e["y"] = e.get("base_y", e["y"])
                     else:
@@ -1786,51 +1680,15 @@ def main():
                         e["dir"] *= -1
 
                 else:
-                    # Standard patrol (vildsvin, orm, skelett) med aggro-beteende
-                    # Fienden stannar på sin plattform – clampas inom patrol-gränserna
-                    AGGRO_RANGE = 240   # pixlar – aggreras inom detta avstånd
-                    dx_to_player = prect.centerx - e["x"]
-                    in_aggro = abs(dx_to_player) < AGGRO_RANGE
-                    e["in_aggro"] = in_aggro   # skickas till draw_enemy för animation
+                    # Standard patrol (vildsvin, orm, skelett)
+                    e["x"] += e["spd"] * e["dir"]
+                    if e["patrol_w"]>0 and (e["x"]>e["patrol_x"]+e["patrol_w"] or e["x"]<e["patrol_x"]):
+                        e["dir"] *= -1
 
-                    if in_aggro and e["patrol_w"] > 0:
-                        # Jaga spelaren men lämna aldrig plattformen
-                        chase_dir = 1.0 if dx_to_player > 0 else -1.0
-                        e["dir"] = chase_dir
-                        new_x = e["x"] + e["spd"] * 1.5 * chase_dir
-                        # Håll inom patrull-zonen
-                        new_x = max(e["patrol_x"], min(e["patrol_x"] + e["patrol_w"], new_x))
-                        e["x"] = new_x
-                    elif in_aggro and e["patrol_w"] == 0:
-                        # Stationär fiende (patrol_w=0) – håll stilla, vänd sig bara mot spelaren
-                        e["dir"] = 1.0 if dx_to_player > 0 else -1.0
-                    else:
-                        # Normal patrull
-                        e["x"] += e["spd"] * e["dir"]
-                        if e["patrol_w"]>0 and (e["x"]>e["patrol_x"]+e["patrol_w"] or e["x"]<e["patrol_x"]):
-                            e["dir"] *= -1
-
-                # Kollisionsbox: Använd e["y"] - ih som top eftersom draw_enemy ritar med y = e["y"] - ih
-                # e["h"] är 54 som standard, men ih kan variera för animerade sprites
-                # Använd ih från draw_enemy för korrekt y-position
-                ih_enemy = 54  # fallback
-                if typ in ENEMY_ANIM and ENEMY_ANIM[typ]:
-                    anim_states = ENEMY_ANIM[typ]
-                    if typ == "vildsvin":
-                        state = "charge" if e.get("in_aggro", False) else "idle"
-                    elif typ == "orm":
-                        state = "attack" if e.get("in_aggro", False) else "idle"
-                    else:
-                        state = next(iter(anim_states))
-                    frames = anim_states.get(state, [])
-                    if frames:
-                        ih_enemy = frames[0].get_height()
-                er = pygame.Rect(int(e["x"]-e["w"]//2), int(e["y"] - ih_enemy), e["w"], ih_enemy)
+                er = pygame.Rect(int(e["x"]-e["w"]//2), int(e["y"]), e["w"], e["h"])
                 if prect.colliderect(er) and invincible == 0:
-                    # Stomp: Luna faller ner och träffar fiendens övre halva
-                    stomp_zone = er.top + er.h // 2
-                    if prect.bottom <= stomp_zone + 5 and vy > 0:
-                        enemies.remove(e); vy = -14; score += 30
+                    if prect.bottom < er.centery and vy > 0:
+                        enemies.remove(e); vy = -12; score += 30
                         ec = LAVA_PART if lvl==3 else ([(140,60,180),(180,80,220)] if lvl==2 else [(80,130,60),(120,180,80)])
                         spawn_parts(parts, e["x"], e["y"], 12, cols=ec)
                         play_sfx(SND_COIN)
@@ -1841,75 +1699,16 @@ def main():
                             play_sfx(SND_DEATH); stop_music()
                             add_score(save_data,pname[0],score,gtime); state=S_DEAD
 
-            # Projektil-kollision (slem + tagg)
+            # Tagg-projektiler skadar Luna
             for p in parts[:]:
-                if not p.get("is_thorn"): continue
-                if p not in parts: continue
-                pr = pygame.Rect(int(p["x"]-p["r"]), int(p["y"]-p["r"]), p["r"]*2, p["r"]*2)
-
-                # Träffar Luna?
-                if pr.colliderect(prect) and invincible == 0:
-                    lives -= 1; invincible = 90; play_sfx(SND_HIT)
-                    if p.get("is_slime"):
-                        # Slem-splash
-                        for _ in range(10):
-                            angle = random.uniform(0, math.pi*2)
-                            spd2  = random.uniform(1.5, 4.5)
-                            parts.append({
-                                "x": p["x"], "y": p["y"],
-                                "vx": math.cos(angle)*spd2,
-                                "vy": math.sin(angle)*spd2 - 2.0,
-                                "life": random.uniform(0.5, 0.9),
-                                "decay": 0.04, "r": random.randint(3, 6),
-                                "col": random.choice([(60,180,30),(90,210,50),(40,140,20)]),
-                                "is_thorn": False,
-                            })
-                    if p in parts: parts.remove(p)
-                    if lives <= 0:
-                        play_sfx(SND_DEATH); stop_music()
-                        add_score(save_data, pname[0], score, gtime); state = S_DEAD
-                    continue
-
-                # Slem-klump träffar plattform → bli pöl
-                if p.get("is_slime"):
-                    hit_floor = any(pr.colliderect(plt) for plt in all_collidable)
-                    if hit_floor or p["y"] > SH - 40:
-                        # Hitta plattformens topp-y
-                        puddle_y = p["y"]
-                        for plt in all_collidable:
-                            if pr.colliderect(plt):
-                                puddle_y = float(plt.top)
-                                break
-                        slime_puddles.append({
-                            "x": p["x"], "y": puddle_y,
-                            "w": 40, "life": 480,   # 8 sekunder vid 60fps
-                        })
-                        # Stänk vid landning
-                        for _ in range(6):
-                            a2 = random.uniform(-math.pi, 0)
-                            parts.append({
-                                "x": p["x"], "y": puddle_y,
-                                "vx": math.cos(a2)*random.uniform(1,3),
-                                "vy": math.sin(a2)*random.uniform(1,3),
-                                "life": 0.6, "decay": 0.05, "r": 4,
-                                "col": (60,180,30), "is_thorn": False,
-                            })
-                        if p in parts: parts.remove(p)
-
-            # Slem-pölar – uppdatera och kolla kollision
-            for sp in slime_puddles[:]:
-                sp["life"] -= 1
-                if sp["life"] <= 0:
-                    slime_puddles.remove(sp)
-                    continue
-                spr = pygame.Rect(int(sp["x"] - sp["w"]//2), int(sp["y"] - 8), sp["w"], 10)
-                if spr.colliderect(prect) and invincible == 0:
-                    lives -= 1; invincible = 90; play_sfx(SND_HIT)
-                    spawn_parts(parts, prect.centerx, prect.bottom, 6,
-                                cols=[(60,180,30),(90,210,50)])
-                    if lives <= 0:
-                        play_sfx(SND_DEATH); stop_music()
-                        add_score(save_data, pname[0], score, gtime); state = S_DEAD
+                if p.get("is_thorn") and invincible==0:
+                    pr=pygame.Rect(int(p["x"]-p["r"]),int(p["y"]-p["r"]),p["r"]*2,p["r"]*2)
+                    if pr.colliderect(prect):
+                        lives-=1; invincible=90; play_sfx(SND_HIT)
+                        parts.remove(p)
+                        if lives<=0:
+                            play_sfx(SND_DEATH); stop_music()
+                            add_score(save_data,pname[0],score,gtime); state=S_DEAD
 
             # Mynt
             for c in coins:
@@ -1920,18 +1719,9 @@ def main():
                         play_sfx(SND_COIN); spawn_parts(parts,c["x"],c["y"],8)
 
             # Checkpoints
-            # FIX #6: spara y från plattformen, inte spelarens luftposition
             for i,cx2 in enumerate(checks):
                 if prect.x>cx2 and not check_active[i]:
-                    check_active[i]=True
-                    # Hitta plattformen Luna står på för ett stabilt y
-                    chk_y = prect.y
-                    if on_gnd:
-                        for p in all_collidable:
-                            if prect.colliderect(p.inflate(4,4)):
-                                chk_y = p.top - prect.height
-                                break
-                    checkpoint_pos=(prect.x, chk_y)
+                    check_active[i]=True; checkpoint_pos=(prect.x,prect.y)
 
             # Fall ur banan
             if prect.top>SH+300:
@@ -1957,11 +1747,8 @@ def main():
                     state = S_TRANS; checkpoint_pos = None
 
             # Kamera
-            # FIX #7: clamp kameran mot båda ändar
-            LEVEL_WIDTH = {1: 5700, 2: 5100, 3: 5600}.get(lvl, 5700)
             tc=prect.centerx-SW//3
-            cam_x+=(tc-cam_x)*0.11
-            cam_x=max(0.0, min(cam_x, float(LEVEL_WIDTH - SW)))
+            cam_x+=(tc-cam_x)*0.11; cam_x=max(0.0,cam_x)
 
             # Moln
             for c in clouds:
@@ -2144,13 +1931,13 @@ def main():
                 pygame.draw.circle(screen,(30,20,50),(SW-115,80),38)
             else:
                 # Vulkan: glödande röd sol med puls
-                rpulse=int(54+math.sin(render_tick*0.05)*6)  # FIX #9
+                rpulse=int(54+math.sin(atick*0.05)*6)
                 pygame.draw.circle(screen,(255,60,0),(SW-130,95),rpulse+10)
                 pygame.draw.circle(screen,pal["sun"],(SW-130,95),rpulse)
 
             # Stjärnor
             bright=0.4 if lvl==1 else (1.4 if lvl==2 else 1.8)
-            draw_stars(screen,stars,cam_x,render_tick,bright_base=bright)  # FIX #9
+            draw_stars(screen,stars,cam_x,atick,bright_base=bright)
 
             # Bakgrundsmoln / rök
             for c in clouds:
@@ -2163,7 +1950,7 @@ def main():
                     sx2=int(tx2-cam_x)
                     if -60<sx2<SW+60:
                         glow=pygame.Surface((140,140),pygame.SRCALPHA)
-                        a2=int(70+math.sin(render_tick*0.18+tx2)*20)  # FIX #9
+                        a2=int(70+math.sin(atick*0.18+tx2)*20)
                         pygame.draw.circle(glow,(255,140,30,a2),(70,70),70)
                         screen.blit(glow,(sx2-70,int(ty2)-70))
 
@@ -2200,12 +1987,12 @@ def main():
                     # Glödlinje ovanpå
                     pygame.draw.line(screen,(255,230,80),(sx2,lava_y),(sx2+lw,lava_y),3)
                     # Lava-bubblor
-                    if render_tick%20==int(lx)%20:  # FIX #9
+                    if atick%20==int(lx)%20:
                         spawn_parts(parts,lx+random.randint(0,lw),lava_y,2,cols=LAVA_PART)
 
             # Facklor (nivå 2)
             if lvl==2:
-                for tx2,ty2 in TORCHES: draw_torch(screen,tx2,ty2,cam_x,render_tick)  # FIX #9
+                for tx2,ty2 in TORCHES: draw_torch(screen,tx2,ty2,cam_x,atick)
 
             # Checkpoints – placeras ovanpå närmaste plattform
             for i, cx2 in enumerate(checks):
@@ -2215,15 +2002,15 @@ def main():
                     if p.left < cx2 < p.right:
                         best_plat_y = p.top
                         break
-                draw_checkpoint(screen, cx2, best_plat_y, cam_x, check_active[i], render_tick)  # FIX #9
+                draw_checkpoint(screen, cx2, best_plat_y, cam_x, check_active[i], atick)
 
             # Mynt
-            draw_coins(screen,coins,cam_x,render_tick)  # FIX #9
+            draw_coins(screen,coins,cam_x,atick)
 
             # Svart katt – nivåmål (ej på boss-nivå 3)
             if lvl in CAT_POS and not boss_fight:
                 cat_x, cat_plat_y = CAT_POS[lvl]
-                draw_cat(screen, cat_x, cat_plat_y - CAT_H//2, cam_x, render_tick)  # FIX #9
+                draw_cat(screen, cat_x, cat_plat_y - CAT_H//2, cam_x, atick)
 
             # Meteorer (nivå 3)
             if lvl==3:
@@ -2244,17 +2031,6 @@ def main():
 
             # Fiender
             for e in enemies: draw_enemy(screen,e,cam_x,e["tick"])
-
-            # Slem-pölar (ritas efter fiender, under partiklar)
-            for sp in slime_puddles:
-                sx2 = int(sp["x"] - cam_x)
-                if -80 < sx2 < SW + 80:
-                    alpha = min(220, int(sp["life"] / 480 * 200) + 80)
-                    pw2 = sp["w"]
-                    ps2 = pygame.Surface((pw2, 12), pygame.SRCALPHA)
-                    pygame.draw.ellipse(ps2, (40, 140, 20, alpha), (0, 0, pw2, 12))
-                    pygame.draw.ellipse(ps2, (90, 210, 50, alpha//2), (pw2//4, 2, pw2//2, 6))
-                    screen.blit(ps2, (sx2 - pw2//2, int(sp["y"]) - 10))
 
             # Boss (nivå 3)
             if lvl==3 and boss is not None and boss["hp"]>0:
@@ -2307,7 +2083,7 @@ def main():
 
             # Räven – rita med korrekt sprite och nuvarande animation
             draw_fox(screen, prect, cam_x,
-                     current_anim, anim_frame, fright, render_tick,  # FIX #9
+                     current_anim, anim_frame, fright, atick,
                      invincible > 0)
 
             # HUD

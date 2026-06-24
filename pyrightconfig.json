@@ -1,0 +1,17 @@
+{
+  "include": ["main.py"],
+  "exclude": [
+    "**/__pycache__",
+    "**/.mypy_cache",
+    "venv",
+    "ltm",
+    "raw bilder",
+    "main(7).py",
+    "mainbackup.py",
+    "main_backup_before_fixes.py",
+    "main_backup_original.py",
+    "main_ORIGINAL_BACKUP.py"
+  ],
+  "typeCheckingMode": "basic",
+  "reportMissingTypeStubs": "none"
+}

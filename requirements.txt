@@ -1,0 +1,8 @@
+pygame==2.6.1
+# pygame-ce==2.5.2   # om du använder pygame-ce
+requests==2.32.3   # om du använder det någonstans
+numpy==2.2.0       # om du använder det för partiklar eller liknande
+
+# För framtida utveckling
+# pillow==11.0.0
+# pytmx==1.2.0      # om du vill använda tiled maps senare

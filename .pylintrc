@@ -1,0 +1,28 @@
+[MASTER]
+ignore=venv,ltm,__pycache__,.mypy_cache
+ignore-patterns=main\(7\)\.py,mainbackup\.py,main_backup_.*\.py,main_ORIGINAL_BACKUP\.py
+extension-pkg-allow-list=pygame
+
+[MESSAGES CONTROL]
+disable=
+    missing-function-docstring,
+    missing-class-docstring,
+    invalid-name,
+    line-too-long,
+    trailing-whitespace,
+    too-many-lines,
+    too-many-locals,
+    too-many-branches,
+    too-many-statements,
+    too-many-arguments,
+    too-many-positional-arguments,
+    too-many-nested-blocks,
+    multiple-statements,
+    multiple-imports,
+    wrong-import-order,
+    broad-exception-caught,
+    bare-except,
+    global-statement,
+    use-dict-literal,
+    redefined-outer-name,
+    no-member
