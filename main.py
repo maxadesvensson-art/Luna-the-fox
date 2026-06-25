@@ -359,13 +359,21 @@ def load_animation(folder, target_width=78, target_height=105):
 #     return frames
 
 
+
+
+
+
 def load_all_animations():
     global ANIMATIONS
     ANIMATIONS = {}
     
     print("=== Laddar Luna animationer ===\n")
     
-    ANIMATIONS["idle"]        = load_animation("idle")
+    # ÄNDRA DENNA RAD: Tvinga idle att bara ladda en fast bild (t.ex. "idle.png")
+    # Detta förhindrar att den loopar och växlar bilder när du står still.
+    ANIMATIONS["idle"]        = load_animation("idle")[:1] # [:1] tar bara den första bilden som hittas
+    
+    # Resten av dina animationer laddas som vanligt:
     ANIMATIONS["run"]         = load_animation("run")
     ANIMATIONS["jump"]        = load_animation("jump")
     ANIMATIONS["double_jump"] = load_animation("djump")
@@ -693,74 +701,6 @@ def draw_enemy(surf, e, cam_x, tick):
         for lx3,la3 in [(sx-12,ls3),(sx+2,-ls3),(sx-2,ls3),(sx+12,-ls3)]:
             pygame.draw.rect(surf,dark,(lx3-3,sy,6,14+int(abs(la3))),border_radius=3)
 
-# update_animation körs inuti main()
-def update_animation(): pass
-
-# def draw_fox(surf,rx,ry,face_right,squash,stretch,tick,vx,invincible=False):
-#     if invincible and (tick//4)%2==1: return   # blinkar vid skada
-#     sw=int(44*(2-stretch)*squash)
-#     sh=int(52*stretch/squash)
-#     ox=rx+(44-sw)//2; oy=ry+(52-sh)
-#     flip=1 if face_right else -1
-
-#     # Svans
-#     tbx=ox+(sw-4 if face_right else 4); tby=oy+sh-14
-#     ctx=tbx-flip*30; cty=tby-30
-#     tpx=tbx-flip*50; tpy=tby-10+int(math.sin(tick*0.05)*5)
-#     pts=[(int((1-t)**2*tbx+2*(1-t)*t*ctx+t**2*tpx),
-#           int((1-t)**2*tby+2*(1-t)*t*cty+t**2*tpy))
-#          for t in [i/11 for i in range(12)]]
-#     if len(pts)>=2:
-#         pygame.draw.lines(surf,FOX_BODY,False,pts,9)
-#         pygame.draw.lines(surf,FOX_BELLY,False,pts,4)
-#     pygame.draw.circle(surf,FOX_TIP,(tpx,tpy),7)
-
-#     pygame.draw.ellipse(surf,FOX_BODY,(ox,oy+8,sw,sh-8))
-#     pygame.draw.ellipse(surf,FOX_BELLY,(ox+7,oy+18,sw-14,sh-22))
-
-#     leg=math.sin(tick*0.28)*7 if abs(vx)>0.8 else 0
-#     for lx,ls in [(ox+5,leg),(ox+sw-15,-leg)]:
-#         pygame.draw.rect(surf,FOX_BODY,(lx,oy+sh-16,10,16+int(abs(ls))),border_radius=4)
-
-#     hx=ox+(sw-36)//2; hy=oy-20
-#     pygame.draw.ellipse(surf,FOX_BODY,(hx,hy,36,30))
-#     for edx in [4,20]:
-#         ep=[(hx+edx,hy+6),(hx+edx-5,hy-14),(hx+edx+10,hy-2)]
-#         pygame.draw.polygon(surf,FOX_EAR,ep)
-#         pygame.draw.polygon(surf,(240,150,100),[(x+flip,y+2)for x,y in ep])
-
-#     nx=hx+(27 if face_right else 5)
-#     pygame.draw.ellipse(surf,(40,25,25),(nx,hy+18,9,6))
-#     ex=hx+(21 if face_right else 11); ey=hy+11
-#     pygame.draw.circle(surf,WHITE,(ex,ey),7)
-#     pygame.draw.circle(surf,EYE_PUP,(ex+flip,ey+1),4)
-#     pygame.draw.circle(surf,WHITE,(ex+flip+1,ey-1),1)
-
-# def draw_enemy(surf, e, cam_x, tick):
-#     sx=int(e["x"]-cam_x); sy=int(e["y"])
-#     if sx<-60 or sx>SW+60: return
-#     flip=1 if e["dir"]>0 else -1
-#     # Kropp – lila/grå monster
-#     col=(140,60,180) if e.get("lvl",1)==2 else (80,130,60)
-#     dark=tuple(max(0,c-40) for c in col)
-#     pygame.draw.ellipse(surf,col,(sx-18,sy-24,36,28))   # kropp
-#     pygame.draw.ellipse(surf,dark,(sx-18,sy-24,36,10))  # rygg-rand
-
-#     # Ben (animerat)
-#     ls=math.sin(tick*0.22)*8
-#     for lx,la in [(sx-8,ls),(sx+8,-ls)]:
-#         pygame.draw.rect(surf,dark,(lx-3,sy+4,7,14+int(abs(la))),border_radius=3)
-
-#     # Huvud
-#     pygame.draw.ellipse(surf,col,(sx-14,sy-48,28,26))
-#     # Ögon (röda)
-#     ex2=sx-4+flip*3; ey2=sy-40
-#     pygame.draw.circle(surf,(220,30,30),(ex2,ey2),5)
-#     pygame.draw.circle(surf,(255,255,255),(ex2+flip,ey2-1),2)
-#     # Tänder
-#     for ti in range(3):
-#         tx2=sx-6+ti*6
-#         pygame.draw.rect(surf,WHITE,(tx2,sy-28,4,6),border_radius=2)
 
 
 
@@ -1195,17 +1135,25 @@ def main():
 
 
 
-    # ====================== ANIMATION FUNKTION ======================
+
+
+
+
+
+
+# ── Animation-uppdatering (Sammanfogad version: Stabil + Detaljerad hastighet) ──
     def update_animation():
         nonlocal current_anim, anim_frame, anim_timer, facing_right
 
-        anim_timer += 1 / FPS
+        anim_timer += 1.0 / FPS
 
+        # Välj rätt animation baserat på spelläge
         if dashing:
             new_anim = "dash"
         elif invincible > 0:
             new_anim = "hit"
-        elif not on_gnd:
+        # Behåll den stabila fixen mot flimmer här:
+        elif not on_gnd and abs(vy) > 1.5:
             new_anim = "double_jump" if not djump_avail else "jump"
         elif current_anim == "idle" and abs(vx) > 1.8:
             new_anim = "run"
@@ -1216,20 +1164,30 @@ def main():
         else:
             new_anim = current_anim
 
+        # Återställ frame vid animationsbyte
         if new_anim != current_anim:
             current_anim = new_anim
-            anim_frame = 0
-            anim_timer = 0
+            anim_frame   = 0
+            anim_timer   = 0.0
 
+        # Återinför de skräddarsydda hastigheterna från den gamla koden
         if current_anim in ANIMATIONS and ANIMATIONS[current_anim]:
-            speed = 0.07 if current_anim == "run" else 0.16
-            if anim_timer >= speed:
-                anim_timer = 0
+            fps_map = {
+                "run":         0.08,
+                "idle":        0.20,
+                "dash":        0.06,
+                "hit":         0.10,
+                "jump":        0.18,
+                "double_jump": 0.12,
+                "landing":     0.14,
+            }
+            spd = fps_map.get(current_anim, 0.14)
+            if anim_timer >= spd:
+                anim_timer = 0.0
                 anim_frame = (anim_frame + 1) % len(ANIMATIONS[current_anim])
 
+        # Synka riktningsvariablerna
         facing_right = fright
-    # ================================================================
-
 
 
 
@@ -1329,49 +1287,8 @@ def main():
 
 
 
-    # ── Animation-uppdatering (inuti main för att nå lokala variabler) ──
-    def update_animation():
-        nonlocal current_anim, anim_frame, anim_timer
 
-        anim_timer += 1.0 / FPS
 
-        # Välj rätt animation baserat på spelläge
-        if dashing:
-            new_anim = "dash"
-        elif invincible > 0:
-            new_anim = "hit"
-        elif not on_gnd:
-            new_anim = "double_jump" if not djump_avail else "jump"
-        elif current_anim == "idle" and abs(vx) > 1.8:
-            new_anim = "run"
-        elif current_anim == "run" and abs(vx) < 0.4:
-            new_anim = "idle"
-        elif current_anim not in ("idle","run"):
-            new_anim = "run" if abs(vx) > 1.8 else "idle"
-        else:
-            new_anim = current_anim
-
-        # Återställ frame vid animationsbyte
-        if new_anim != current_anim:
-            current_anim = new_anim
-            anim_frame   = 0
-            anim_timer   = 0.0
-
-        # Ticka frame framåt med rätt hastighet per animation
-        if current_anim in ANIMATIONS and ANIMATIONS[current_anim]:
-            fps_map = {
-                "run":         0.08,
-                "idle":        0.20,
-                "dash":        0.06,
-                "hit":         0.10,
-                "jump":        0.18,
-                "double_jump": 0.12,
-                "landing":     0.14,
-            }
-            spd = fps_map.get(current_anim, 0.14)
-            if anim_timer >= spd:
-                anim_timer = 0.0
-                anim_frame = (anim_frame + 1) % len(ANIMATIONS[current_anim])
 
     # Fade-overlay
     fade_surf=pygame.Surface((SW,SH)); fade_surf.fill((0,0,0))
@@ -1517,7 +1434,6 @@ def main():
             jsq+=(1.0-jsq)*0.20; jst+=(1.0-jst)*0.15
 
 
-            # Animation uppdatering
             update_animation()
 
 
